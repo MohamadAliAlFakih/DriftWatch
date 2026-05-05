@@ -47,13 +47,19 @@ services:
       postgres:
         condition: service_healthy
     env_file: .env
-    # mlflow image ships with mlflow CLI; psycopg2 is bundled. Server binds 0.0.0.0:5000.
-    command: >
-      mlflow server
-      --backend-store-uri ${MLFLOW_BACKEND_URI}
-      --default-artifact-root ${MLFLOW_ARTIFACT_ROOT}
-      --host 0.0.0.0
-      --port 5000
+    # MLflow's official image ships the CLI but NOT the Postgres driver.
+    # Install psycopg2-binary on container start, then launch the server.
+    # Server binds 0.0.0.0:5000 inside the container.
+    command:
+      - bash
+      - -c
+      - |
+        pip install --quiet psycopg2-binary && \
+        mlflow server \
+          --backend-store-uri ${MLFLOW_BACKEND_URI} \
+          --default-artifact-root ${MLFLOW_ARTIFACT_ROOT} \
+          --host 0.0.0.0 \
+          --port 5000
     ports:
       - "5000:5000"
     volumes:

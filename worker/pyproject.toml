@@ -26,5 +26,6 @@ asyncio_mode = "auto"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# worker ships a flat main.py, not a package directory — tell hatchling to include it as-is
 [tool.hatch.build.targets.wheel]
-packages = ["worker"]
+bypass-selection = true
