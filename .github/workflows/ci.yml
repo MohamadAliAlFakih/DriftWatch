@@ -1,0 +1,28 @@
+# DriftWatch CI — Phase 0 scaffold.
+# Runs on every push and pull_request to main. Phase 0 jobs are intentional
+# no-ops: they exist to validate the workflow YAML and prove the workflow runs.
+# Real checks (uv sync, ruff, mypy, pytest, snapshot trajectory tests with mocked
+# LLM, 1e-12 fidelity replay, multi-service docker build) are added in Phase 6
+# (REQ-IDs TEST-04, DEPLOY-01..04). See:
+# docs - DO NOT COMMIT/.planning/phases/00-skeleton-compose/00-CONTEXT.md (D-19).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Phase 0 scaffold
+        run: |
+          echo "ci scaffold — real tests added in Phase 6 (TEST-04)."
+          echo "Phase 0 only validates that the workflow YAML parses and runs."

@@ -1,0 +1,114 @@
+# DriftWatch — root docker-compose.
+# `docker-compose up` from a fresh clone (after `cp .env.example .env`) brings up:
+# postgres, redis, mlflow, platform, agent, worker, dashboard.
+# See docs - DO NOT COMMIT/.planning/phases/00-skeleton-compose/00-CONTEXT.md (D-08..D-12).
+
+name: driftwatch
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: driftwatch-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: driftwatch-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: driftwatch-mlflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    # mlflow image ships with mlflow CLI; psycopg2 is bundled. Server binds 0.0.0.0:5000.
+    command: >
+      mlflow server
+      --backend-store-uri ${MLFLOW_BACKEND_URI}
+      --default-artifact-root ${MLFLOW_ARTIFACT_ROOT}
+      --host 0.0.0.0
+      --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+
+  platform:
+    build:
+      context: .
+      dockerfile: ./platform/Dockerfile
+    container_name: driftwatch-platform
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8001:8000"
+
+  agent:
+    build:
+      context: .
+      dockerfile: ./agent/Dockerfile
+    container_name: driftwatch-agent
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8002:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./worker/Dockerfile
+    container_name: driftwatch-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file: .env
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: ./dashboard/Dockerfile
+    container_name: driftwatch-dashboard
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8501:8501"
+
+volumes:
+  postgres_data:
+  redis_data:
+  mlflow_artifacts:
