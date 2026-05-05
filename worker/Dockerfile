@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_LINK_MODE=copy
+
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+
+WORKDIR /app
+COPY worker/pyproject.toml /app/pyproject.toml
+COPY worker/uv.lock /app/uv.lock
+
+RUN uv sync --frozen --no-dev
+
+COPY worker/main.py /app/main.py
+
+CMD ["uv", "run", "arq", "main.WorkerSettings"]

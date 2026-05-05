@@ -1,0 +1,27 @@
+"""FastAPI application factory for the DriftWatch agent service."""
+
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
+from fastapi import FastAPI
+
+from app.api import health
+from app.config import get_settings
+from app.core.logging import configure_logging, get_logger
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Startup/shutdown hook. Phase 0 wires nothing — singletons land here later."""
+    settings = get_settings()
+    configure_logging(level=settings.log_level, env=settings.app_env)
+    log = get_logger(__name__)
+    log.info("agent_startup", env=settings.app_env)
+    try:
+        yield
+    finally:
+        log.info("agent_shutdown")
+
+
+app = FastAPI(title="driftwatch-agent", version="0.1.0", lifespan=lifespan)
+app.include_router(health.router)

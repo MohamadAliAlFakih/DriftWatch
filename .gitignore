@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+dogi# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DriftWatch — local-only docs (planning, brief, references, instructor examples)
+docs - DO NOT COMMIT/
+
+# MLflow local artifacts (when running outside Docker)
+mlruns/
+mlartifacts/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Docker volumes mounted into the repo
+postgres_data/
+redis_data/
+
