@@ -1,6 +1,7 @@
 """FastAPI dependency providers.
 
-Service singletons (DB engine, MLflow client, redis pool, LLM client) are wired here in later phases.
+Service singletons (DB engine, MLflow client, redis pool, LLM client) are wired
+here in later phases.
 Phase 0 leaves this file as a stub — only get_settings_dep is exposed.
 """
 

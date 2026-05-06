@@ -1,0 +1,20 @@
+"""Model registry orchestration for the selected best model."""
+
+from __future__ import annotations
+
+from app.ml.mlflow_utils import register_model
+
+
+def register_best_model(
+    *,
+    run_id: str,
+    registered_model_name: str,
+    model_artifact_path: str = "model",
+) -> str:
+    """Register only the chosen final model run."""
+    return register_model(
+        run_id=run_id,
+        model_artifact_path=model_artifact_path,
+        registered_model_name=registered_model_name,
+    )
+

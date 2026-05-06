@@ -1,0 +1,25 @@
+{
+  "baseline_run_ids": [
+    "bfa681ad0ca84d66b0bf34edf94146ab",
+    "8fcc29f4c7514652bf1897a56b339fd4",
+    "de3b11142d094202b99dd1392033e008"
+  ],
+  "dataset": {
+    "column_count": 17,
+    "filename": "bank-full.csv",
+    "md5": "e6b0ca77f3f200ec5428e04dd104da53",
+    "row_count": 45211
+  },
+  "final_run_id": "369bb32bb0104766aafff2e0e85b386d",
+  "mlflow_experiment_name": "DriftWatch Bank Marketing",
+  "model_artifact_path": "artifacts/model_v1/model.pkl",
+  "model_artifact_sha256": "aa7801586b69c1360db2aa6181ca4aa223a30d718c865015f1e572fd23d73830",
+  "model_version_label": "v1",
+  "registered_model_name": "driftwatch-bank-marketing",
+  "registered_version": "1",
+  "run_created_at": "2026-05-06T01:26:33.371241+00:00",
+  "selected_model": "hist_gradient_boosting",
+  "tuned_run_ids": [
+    "fa7c5155ae67436d8c3d1ff0d01222cc"
+  ]
+}
