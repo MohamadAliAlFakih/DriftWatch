@@ -1,0 +1,40 @@
+{
+  "scenario": "no_action_minor_drift",
+  "input": {
+    "event_id": "evt-noop-1",
+    "emitted_at": "2026-05-04T12:00:00+00:00",
+    "model_name": "bank-cls",
+    "model_version": 3,
+    "window_start": "2026-05-04T11:00:00+00:00",
+    "window_end": "2026-05-04T12:00:00+00:00",
+    "window_size": 500,
+    "previous_severity": "green",
+    "current_severity": "yellow",
+    "top_metrics": [
+      {
+        "feature": "age",
+        "metric": "psi",
+        "value": 0.12,
+        "threshold": 0.1
+      }
+    ]
+  },
+  "fake_llm_responses": [
+    {
+      "severity_assessment": "marginal yellow shift on a single demographic feature",
+      "likely_cause": "small population skew",
+      "recommended_action": "no_action"
+    },
+    "## Investigation noop-1\n\nMinor age-distribution drift on bank-cls v3, no action taken \u2014 within yellow tolerance."
+  ],
+  "expected_trajectory": [
+    {
+      "node": "triage",
+      "current_node": "triage"
+    },
+    {
+      "node": "comms",
+      "current_node": "done"
+    }
+  ]
+}
