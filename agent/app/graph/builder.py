@@ -41,6 +41,9 @@ def build_graph(
     # after comms: terminal
     graph.add_edge("comms", END)
 
+    # compile the graph; chat_model is attached as an attribute so graph_runner can read it
+    # and inject it into per-call config (with_config produces a RunnableBinding which loses
+    # CompiledStateGraph methods like aget_state — keep the compiled object intact instead)
     compiled = graph.compile(checkpointer=checkpointer)
-    # bind chat_model into runnable config so every node call sees it
-    return compiled.with_config({"configurable": {"chat_model": chat_model}})
+    compiled.chat_model = chat_model  # type: ignore[attr-defined]
+    return compiled

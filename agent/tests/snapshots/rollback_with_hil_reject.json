@@ -1,0 +1,63 @@
+{
+  "scenario": "rollback_with_hil_reject",
+  "input": {
+    "event_id": "evt-rollback-rej-1",
+    "emitted_at": "2026-05-04T12:00:00+00:00",
+    "model_name": "bank-cls",
+    "model_version": 4,
+    "window_start": "2026-05-04T11:00:00+00:00",
+    "window_end": "2026-05-04T12:00:00+00:00",
+    "window_size": 800,
+    "previous_severity": "green",
+    "current_severity": "red",
+    "top_metrics": [
+      {
+        "feature": "y_pred_dist",
+        "metric": "output_dist",
+        "value": 0.31,
+        "threshold": 0.1
+      }
+    ]
+  },
+  "fake_llm_responses": [
+    {
+      "severity_assessment": "output distribution flipped after v4 promotion",
+      "likely_cause": "v4 calibration regression suspected",
+      "recommended_action": "rollback"
+    },
+    {
+      "action": "rollback",
+      "target_version": 3,
+      "rationale": "v4 looks broken; roll back to v3"
+    },
+    {
+      "action": "rollback",
+      "target_version": 3,
+      "rationale": "v4 looks broken; roll back to v3"
+    },
+    "## Investigation rollback-rej-1\n\nRollback rejected by reviewer \u2014 investigation closed without action."
+  ],
+  "resume_payload": {
+    "approved": false,
+    "approver": "test-user",
+    "note": "rejected; investigating manually"
+  },
+  "expected_trajectory": [
+    {
+      "node": "triage",
+      "current_node": "triage"
+    },
+    {
+      "node": "__interrupt__",
+      "current_node": "(unchanged)"
+    },
+    {
+      "node": "action",
+      "current_node": "comms"
+    },
+    {
+      "node": "comms",
+      "current_node": "done"
+    }
+  ]
+}

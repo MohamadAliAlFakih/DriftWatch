@@ -35,7 +35,13 @@ async def start_investigation(
     drift_event: DriftEventV1,
 ) -> None:
     # thread_id == investigation_id (D-02) — checkpointer keys state on this id
-    config = {"configurable": {"thread_id": str(investigation_id)}}
+    # merge chat_model from the compiled graph (set by builder) into per-call config so nodes can read it
+    config = {
+        "configurable": {
+            "thread_id": str(investigation_id),
+            "chat_model": getattr(graph, "chat_model", None),
+        }
+    }
     now = datetime.now(timezone.utc)
     # build the initial graph input — same shape that was persisted to investigations.state
     initial_state = InvestigationState(
@@ -73,7 +79,13 @@ async def resume_investigation(
     payload: dict[str, Any],
 ) -> InvestigationState | None:
     # thread_id == investigation_id (D-02) — same key used in start_investigation
-    config = {"configurable": {"thread_id": str(investigation_id)}}
+    # merge chat_model from the compiled graph (set by builder) into per-call config so nodes can read it
+    config = {
+        "configurable": {
+            "thread_id": str(investigation_id),
+            "chat_model": getattr(graph, "chat_model", None),
+        }
+    }
     try:
         # Command(resume=payload) feeds the payload into the paused interrupt() call
         await graph.ainvoke(Command(resume=payload), config=config)

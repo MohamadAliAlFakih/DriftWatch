@@ -1,0 +1,55 @@
+{
+  "scenario": "green_to_red_retrain",
+  "input": {
+    "event_id": "evt-retrain-1",
+    "emitted_at": "2026-05-04T12:00:00+00:00",
+    "model_name": "bank-cls",
+    "model_version": 3,
+    "window_start": "2026-05-04T11:00:00+00:00",
+    "window_end": "2026-05-04T12:00:00+00:00",
+    "window_size": 1000,
+    "previous_severity": "green",
+    "current_severity": "red",
+    "top_metrics": [
+      {
+        "feature": "euribor3m",
+        "metric": "psi",
+        "value": 0.42,
+        "threshold": 0.2
+      },
+      {
+        "feature": "job",
+        "metric": "chi2",
+        "value": 28.5,
+        "threshold": 12.0
+      }
+    ]
+  },
+  "fake_llm_responses": [
+    {
+      "severity_assessment": "real persistent drift on rate + job",
+      "likely_cause": "rate regime shift drove job-mix change",
+      "recommended_action": "retrain"
+    },
+    {
+      "action": "retrain",
+      "target_version": 4,
+      "rationale": "retrain on the current rolling window; register v4 in non-Production"
+    },
+    "## Investigation retrain-1\n\nbank-cls v3 flipped green->red on euribor3m + job. Retrain enqueued; v4 will land in non-Production stage."
+  ],
+  "expected_trajectory": [
+    {
+      "node": "triage",
+      "current_node": "triage"
+    },
+    {
+      "node": "action",
+      "current_node": "comms"
+    },
+    {
+      "node": "comms",
+      "current_node": "done"
+    }
+  ]
+}

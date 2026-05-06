@@ -49,6 +49,40 @@ def _format_metrics_block(state: InvestigationState) -> str:
 
 # triage node — produces TriageOutput, writes current_node="triage"
 async def triage_node(state: InvestigationState, config: RunnableConfig) -> dict[str, Any]:
+    # AGENT-06 / D-14: on resume, verify the model URI under investigation still exists.
+    # http_client + settings are wired in via RunnableConfig.configurable when the agent boots;
+    # tests that don't exercise stale handling pass neither (or pass None) — branch is a no-op.
+    configurable = (config or {}).get("configurable") or {}
+    http_client = configurable.get("http_client")
+    settings = configurable.get("settings")
+    if http_client is not None and settings is not None:
+        # local import keeps the dependency optional for tests that don't need it
+        from app.services.registry_check import model_uri_exists
+
+        # ask the platform whether the model version still exists in the registry
+        exists = await model_uri_exists(
+            http_client,
+            settings,
+            state.drift_event.model_name,
+            state.drift_event.model_version,
+        )
+        if not exists:
+            # log + transition to the stale terminal so the supervisor routes to comms (D-14)
+            log.warning(
+                "model_uri_stale",
+                investigation_id=state.investigation_id,
+                model_name=state.drift_event.model_name,
+                model_version=state.drift_event.model_version,
+            )
+            return {
+                "current_node": "stale",
+                "error": (
+                    f"model uri {state.drift_event.model_name}@v{state.drift_event.model_version} "
+                    "no longer exists"
+                ),
+                "updated_at": datetime.now(timezone.utc),
+            }
+
     chat = _chat_model(config).with_structured_output(TriageOutput)
     sys_prompt = load_prompt("triage_system")
     user_prompt = load_prompt("triage_user").format(
