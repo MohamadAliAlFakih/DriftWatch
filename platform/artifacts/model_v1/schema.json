@@ -1,0 +1,324 @@
+{
+  "excluded_columns": [
+    "duration"
+  ],
+  "features": [
+    {
+      "dtype": "int64",
+      "name": "age",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "admin.",
+        "blue-collar",
+        "entrepreneur",
+        "housemaid",
+        "management",
+        "retired",
+        "self-employed",
+        "services",
+        "student",
+        "technician",
+        "unemployed",
+        "unknown"
+      ],
+      "dtype": "object",
+      "name": "job",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "divorced",
+        "married",
+        "single"
+      ],
+      "dtype": "object",
+      "name": "marital",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "primary",
+        "secondary",
+        "tertiary",
+        "unknown"
+      ],
+      "dtype": "object",
+      "name": "education",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "no",
+        "yes"
+      ],
+      "dtype": "object",
+      "name": "default",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "balance",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "no",
+        "yes"
+      ],
+      "dtype": "object",
+      "name": "housing",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "no",
+        "yes"
+      ],
+      "dtype": "object",
+      "name": "loan",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "cellular",
+        "telephone",
+        "unknown"
+      ],
+      "dtype": "object",
+      "name": "contact",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "day",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "apr",
+        "aug",
+        "dec",
+        "feb",
+        "jan",
+        "jul",
+        "jun",
+        "mar",
+        "may",
+        "nov",
+        "oct",
+        "sep"
+      ],
+      "dtype": "object",
+      "name": "month",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "campaign",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "pdays",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "previous",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "failure",
+        "other",
+        "success",
+        "unknown"
+      ],
+      "dtype": "object",
+      "name": "poutcome",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "pdays_was_minus_one",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "never_contacted_flag",
+      "required": true
+    },
+    {
+      "dtype": "int64",
+      "name": "pdays_clean",
+      "required": true
+    }
+  ],
+  "json_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "age": {
+        "type": "integer"
+      },
+      "balance": {
+        "type": "integer"
+      },
+      "campaign": {
+        "type": "integer"
+      },
+      "contact": {
+        "enum": [
+          "cellular",
+          "telephone",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "day": {
+        "type": "integer"
+      },
+      "default": {
+        "enum": [
+          "no",
+          "yes"
+        ],
+        "type": "string"
+      },
+      "education": {
+        "enum": [
+          "primary",
+          "secondary",
+          "tertiary",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "housing": {
+        "enum": [
+          "no",
+          "yes"
+        ],
+        "type": "string"
+      },
+      "job": {
+        "enum": [
+          "admin.",
+          "blue-collar",
+          "entrepreneur",
+          "housemaid",
+          "management",
+          "retired",
+          "self-employed",
+          "services",
+          "student",
+          "technician",
+          "unemployed",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "loan": {
+        "enum": [
+          "no",
+          "yes"
+        ],
+        "type": "string"
+      },
+      "marital": {
+        "enum": [
+          "divorced",
+          "married",
+          "single"
+        ],
+        "type": "string"
+      },
+      "month": {
+        "enum": [
+          "apr",
+          "aug",
+          "dec",
+          "feb",
+          "jan",
+          "jul",
+          "jun",
+          "mar",
+          "may",
+          "nov",
+          "oct",
+          "sep"
+        ],
+        "type": "string"
+      },
+      "never_contacted_flag": {
+        "type": "integer"
+      },
+      "pdays": {
+        "type": "integer"
+      },
+      "pdays_clean": {
+        "type": "integer"
+      },
+      "pdays_was_minus_one": {
+        "type": "integer"
+      },
+      "poutcome": {
+        "enum": [
+          "failure",
+          "other",
+          "success",
+          "unknown"
+        ],
+        "type": "string"
+      },
+      "previous": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "age",
+      "job",
+      "marital",
+      "education",
+      "default",
+      "balance",
+      "housing",
+      "loan",
+      "contact",
+      "day",
+      "month",
+      "campaign",
+      "pdays",
+      "previous",
+      "poutcome",
+      "pdays_was_minus_one",
+      "never_contacted_flag",
+      "pdays_clean"
+    ],
+    "type": "object"
+  },
+  "required_fields": [
+    "age",
+    "job",
+    "marital",
+    "education",
+    "default",
+    "balance",
+    "housing",
+    "loan",
+    "contact",
+    "day",
+    "month",
+    "campaign",
+    "pdays",
+    "previous",
+    "poutcome",
+    "pdays_was_minus_one",
+    "never_contacted_flag",
+    "pdays_clean"
+  ],
+  "schema_version": 1,
+  "target_excluded": "y",
+  "threshold_location": "threshold.json"
+}

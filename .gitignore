@@ -236,3 +236,4 @@ Thumbs.db
 postgres_data/
 redis_data/
 
+platform/mlflow.db
