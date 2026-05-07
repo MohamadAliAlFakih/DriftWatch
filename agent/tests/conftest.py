@@ -263,3 +263,129 @@ async def async_client(
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac, stub_chat_model, calls
+
+
+# minimal FakeArqPool for agent-side tests (mirrors worker/tests/conftest.py FakeArqPool).
+# Records every enqueue_job; returns None on duplicate _job_id (D-03 native dedup).
+class FakeArqPool:
+    """Mirror of FakeChatModel pattern. Records enqueues + exposes a failed-jobs registry."""
+
+    # init bookkeeping containers used by enqueue_job + DLQ helpers
+    def __init__(self) -> None:
+        # records every enqueue_job call so tests can assert payload + _job_id
+        self.enqueued: list[dict[str, Any]] = []
+        # tracks active job_ids so duplicate _job_id calls return None (D-03)
+        self._active: set[str] = set()
+        # raw bytes-keyed dict mimicking redis 'arq:result:*' keys for dlq_repo tests
+        self._raw: dict[bytes, bytes] = {}
+
+    # mirror arq.ArqRedis.enqueue_job semantics — return None when _job_id is already in-flight
+    async def enqueue_job(
+        self,
+        function: str,
+        *args: Any,
+        _job_id: str | None = None,
+        **kwargs: Any,
+    ):
+        # idempotency: return None on duplicate _job_id (matches arq native, D-03)
+        if _job_id is not None and _job_id in self._active:
+            return None
+        if _job_id is not None:
+            self._active.add(_job_id)
+        self.enqueued.append(
+            {"function": function, "_job_id": _job_id, "kwargs": kwargs}
+        )
+
+        # arq returns a Job-like object with .job_id; tests only check truthiness
+        class _Job:
+            job_id = _job_id
+
+        return _Job()
+
+    # mark a job as no-longer-active (mirror of keep_result expiry) — test-only helper
+    def expire(self, jid: str) -> None:
+        self._active.discard(jid)
+
+    # dlq_repo iterates keys('arq:result:*') and decodes via deserialize_result
+    async def keys(self, pattern: str) -> list[bytes]:
+        # only support the one pattern dlq_repo uses
+        if pattern == "arq:result:*":
+            return [k for k in self._raw.keys() if k.startswith(b"arq:result:")]
+        return []
+
+    # fetch a raw value by key — bytes or str both supported
+    async def get(self, key: Any) -> bytes | None:
+        if isinstance(key, str):
+            key = key.encode()
+        return self._raw.get(key)
+
+    # arq pool .close() called in lifespan shutdown — no-op for the fake
+    async def close(self, close_connection_pool: bool = True) -> None:
+        return None
+
+    # test-only helper to seed a failed JobResult into the DLQ store (pickled dict)
+    def seed_failed(
+        self,
+        *,
+        job_id: str,
+        function: str,
+        error: str,
+        attempts: int = 3,
+        failed_at: datetime | None = None,
+    ) -> None:
+        # pickle the dict; tests monkey-patch arq.jobs.deserialize_result to read pickle
+        import pickle
+
+        payload = {
+            "success": False,
+            "function": function,
+            "result": Exception(error),
+            "finish_time": failed_at or datetime.now(timezone.utc),
+            "job_try": attempts,
+        }
+        self._raw[f"arq:result:{job_id}".encode()] = pickle.dumps(payload)
+
+
+# fresh FakeArqPool per test — no shared state between tests
+@pytest.fixture
+def fake_arq_pool() -> "FakeArqPool":
+    return FakeArqPool()
+
+
+# extended async_client fixture that ALSO injects fake_arq_pool — composes with existing patches
+@pytest_asyncio.fixture
+async def async_client_with_arq(
+    in_memory_investigations: dict[uuid.UUID, dict[str, Any]],
+    stub_sessionmaker: Any,
+    stub_chat_model: FakeChatModel,
+    recording_http_client: tuple[httpx.AsyncClient, list[dict[str, Any]]],
+    fake_arq_pool: "FakeArqPool",
+    monkeypatch: pytest.MonkeyPatch,
+) -> AsyncIterator[tuple[AsyncClient, FakeChatModel, list[dict[str, Any]], "FakeArqPool"]]:
+    client_obj, calls = recording_http_client
+    from app import main as main_mod
+    from app.graph import llm as llm_mod
+
+    # patch chat model factory in BOTH import sites
+    monkeypatch.setattr(main_mod, "build_chat_model", lambda _settings: stub_chat_model)
+    monkeypatch.setattr(llm_mod, "build_chat_model", lambda _settings: stub_chat_model)
+    # patch httpx.AsyncClient inside lifespan — return our recording client
+    monkeypatch.setattr(main_mod.httpx, "AsyncClient", lambda *a, **kw: client_obj)
+
+    # patch the arq_pool builder so lifespan installs our FakeArqPool instead of opening Redis
+    from app.services import arq_pool as arq_pool_mod
+
+    async def _build_fake(_redis_url: str):
+        return fake_arq_pool
+
+    monkeypatch.setattr(arq_pool_mod, "build_arq_pool", _build_fake)
+    # main.py imports build_arq_pool by name at module load — patch it on the main module too
+    monkeypatch.setattr(main_mod, "build_arq_pool", _build_fake, raising=False)
+
+    # import the app AFTER patches so lifespan picks them up on first run
+    from app.main import app
+
+    async with LifespanManager(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac, stub_chat_model, calls, fake_arq_pool
