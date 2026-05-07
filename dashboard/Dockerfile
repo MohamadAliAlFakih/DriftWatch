@@ -13,6 +13,8 @@ COPY dashboard/uv.lock /app/uv.lock
 RUN uv sync --frozen --no-dev
 
 COPY dashboard/app.py /app/app.py
+COPY dashboard/config.py /app/config.py
+COPY dashboard/lib /app/lib
 
 EXPOSE 8501
 CMD ["uv", "run", "streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
