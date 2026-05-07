@@ -24,8 +24,9 @@ log = get_logger(__name__)
 async def recent_events(
     client: httpx.AsyncClient, settings: Settings, since: datetime
 ) -> list[DriftEventV1]:
-    # build the recovery URL + ISO-8601 cursor; platform returns events strictly after `since`
-    url = f"{settings.platform_url}/drift/recent"
+    # build the recovery URL + ISO-8601 cursor; platform routes are under /api/v1/ prefix.
+    # NOTE: DRIFT-04 endpoint may not exist yet on platform; agent treats 404 as non-fatal (count=0).
+    url = f"{settings.platform_url}/api/v1/drift/recent"
     params = {"since": since.isoformat()}
     try:
         # short-ish timeout — boot recovery should not block startup indefinitely
@@ -53,8 +54,9 @@ async def recent_events(
 async def promote(
     client: httpx.AsyncClient, settings: Settings, request: PromotionRequestV1
 ) -> tuple[int, dict[str, Any]]:
-    # build URL + bearer header; the platform asserts the promotion checklist server-side
-    url = f"{settings.platform_url}/registry/promote"
+    # build URL + bearer header; platform's promote endpoint is under /api/v1/promote
+    # (SHE's actual route prefix; PromotionRequestV1 is the Pydantic body it accepts)
+    url = f"{settings.platform_url}/api/v1/promote"
     headers = {"Authorization": f"Bearer {settings.promotion_bearer_token.get_secret_value()}"}
     # promotion can take a moment server-side (gate checks); 20s is generous
     resp = await client.post(

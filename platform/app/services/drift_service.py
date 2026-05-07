@@ -7,6 +7,7 @@ signals, and use categorical frequency tests for categorical features.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -142,7 +143,8 @@ class DriftService:
             and previous_severity != "insufficient_data"
         ):
             alert = self._create_alert(db, report)
-            WebhookService(self.settings).send_drift_alert(alert)
+            # bridge sync drift_service into async webhook delivery (Engineering Standards Ch. 1)
+            asyncio.run(WebhookService(self.settings).send_drift_alert(alert))
             db.commit()
             db.refresh(alert)
             alert_info = {
