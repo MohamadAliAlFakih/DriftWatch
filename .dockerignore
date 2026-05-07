@@ -1,0 +1,58 @@
+# DriftWatch — root .dockerignore
+# All four service Dockerfiles use `context: .` (repo root) in docker-compose.yml,
+# so this file controls what every image build sees. Keeps builds fast and
+# prevents secrets / local state from ever landing in an image layer.
+
+# --- Git ---
+.git
+.gitignore
+.gitattributes
+
+# --- Secrets & local env ---
+.env
+.env.*
+!.env.example
+
+# --- Python virtualenvs (large; never want in images) ---
+.venv
+**/.venv
+env/
+venv/
+ENV/
+
+# --- Python build / cache artifacts ---
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.coverage
+**/htmlcov
+build/
+dist/
+
+# --- Editor / OS junk ---
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# --- Local-only docs (planning, brief, instructor examples) ---
+docs - DO NOT COMMIT
+
+# --- Local data / runtime state (compose volumes + MLflow local files) ---
+postgres_data
+redis_data
+mlruns
+mlartifacts
+**/mlflow.db
+*.rdb
+*.aof
+
+# --- Notebooks ---
+**/.ipynb_checkpoints
+
+# --- Markdown (keep README so images can reference it if needed) ---
+*.md
+!README.md
