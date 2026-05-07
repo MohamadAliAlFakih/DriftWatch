@@ -16,6 +16,8 @@ COPY platform/uv.lock /app/uv.lock
 
 RUN uv sync --frozen --no-dev
 
+COPY platform/alembic.ini /app/alembic.ini
+COPY platform/alembic /app/alembic
 COPY platform/app /app/app
 
 EXPOSE 8000

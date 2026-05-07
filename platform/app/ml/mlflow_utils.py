@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from os import PathLike
 from typing import Any
 
 import mlflow
@@ -10,20 +10,17 @@ import mlflow.sklearn
 
 
 def setup_mlflow(tracking_uri: str, experiment_name: str) -> None:
-    """Point MLflow at the configured tracking store and experiment.
+    """Point MLflow at the tracking server and select/create the experiment.
 
-    For local bootcamp-style runs we use ``sqlite:///mlflow.db`` from inside
-    ``platform/``. That creates ``platform/mlflow.db`` for run metadata and
-    ``platform/mlruns/`` for MLflow-managed run artifacts.
+    DriftWatch uses an MLflow server backed by Postgres. Clients
+    talk to the server over HTTP; they should not connect directly to the MLflow
+    database. The server stores artifact files under its configured artifact root
+    and stores only artifact metadata/URIs in Postgres.
     """
     mlflow.set_tracking_uri(tracking_uri)
     existing = mlflow.get_experiment_by_name(experiment_name)
     if existing is None:
-        artifact_location = _local_sqlite_artifact_location(tracking_uri)
-        if artifact_location is None:
-            mlflow.create_experiment(experiment_name)
-        else:
-            mlflow.create_experiment(experiment_name, artifact_location=artifact_location)
+        mlflow.create_experiment(experiment_name)
     mlflow.set_experiment(experiment_name)
 
 
@@ -33,7 +30,7 @@ def log_experiment_run(
     params: dict[str, Any],
     metrics: dict[str, float],
     model: Any | None = None,
-    artifact_dir: str | Path | None = None,
+    artifact_dir: str | PathLike[str] | None = None,
     model_artifact_path: str = "model",
 ) -> str:
     """Log one training run.
@@ -51,7 +48,7 @@ def log_experiment_run(
         return run.info.run_id
 
 
-def log_artifacts(artifact_dir: str | Path) -> None:
+def log_artifacts(artifact_dir: str | PathLike[str]) -> None:
     """Attach a local artifact folder to the active MLflow run."""
     mlflow.log_artifacts(str(artifact_dir))
 
@@ -61,18 +58,3 @@ def register_model(run_id: str, model_artifact_path: str, registered_model_name:
     model_uri = f"runs:/{run_id}/{model_artifact_path}"
     model_version = mlflow.register_model(model_uri, registered_model_name)
     return str(model_version.version)
-
-
-def _local_sqlite_artifact_location(tracking_uri: str) -> str | None:
-    """Return a file URI artifact root for local SQLite tracking URIs."""
-    prefix = "sqlite:///"
-    if not tracking_uri.startswith(prefix):
-        return None
-
-    db_path = Path(tracking_uri.removeprefix(prefix))
-    if not db_path.is_absolute():
-        db_path = Path.cwd() / db_path
-
-    artifact_dir = db_path.parent / "mlruns"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    return artifact_dir.resolve().as_uri()

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api import health
+from app.api.routes import drift, predict, promote, registry
 from app.config import get_settings
 from app.core.logging import configure_logging, get_logger
 
@@ -25,3 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="driftwatch-platform", version="0.1.0", lifespan=lifespan)
 app.include_router(health.router)
+app.include_router(predict.router)
+app.include_router(drift.router)
+app.include_router(registry.router)
+app.include_router(promote.router)
