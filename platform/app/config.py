@@ -34,7 +34,8 @@ class Settings(BaseSettings):
 
     webhook_hmac_secret: SecretStr
     webhook_timeout_seconds: float = 5.0
-    agent_webhook_url: str = "http://agent:8000/api/v1/webhooks/drift"
+    # agent listens at POST /webhooks/drift (no /api/v1 prefix); see agent/app/api/webhooks.py
+    agent_webhook_url: str = "http://agent:8000/webhooks/drift"
 
     agent_url: str = "http://agent:8000"
     
