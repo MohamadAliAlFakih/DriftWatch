@@ -1,4 +1,10 @@
-"""Registry and promotion API models."""
+"""Registry and promotion API models.
+
+File summary:
+- Defines the response shape for current Production registry state.
+- Defines the promotion checklist that must pass before a model moves to Production.
+- Defines promotion request and response contracts used by the worker and agent flow.
+"""
 
 from typing import Any
 
@@ -6,6 +12,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RegistryStateResponse(BaseModel):
+    """Describe the current Production model state returned by the registry API."""
+
     model_name: str
     production_version: str | None
     model_uri: str | None
@@ -15,6 +23,8 @@ class RegistryStateResponse(BaseModel):
 
 
 class PromotionChecklist(BaseModel):
+    """Represent required safety checks before a model can be promoted."""
+
     model_config = ConfigDict(extra="forbid")
 
     hil_approved: bool
@@ -26,6 +36,8 @@ class PromotionChecklist(BaseModel):
 
 
 class PromotionRequest(BaseModel):
+    """Represent one request to promote a registered model version."""
+
     model_config = ConfigDict(extra="forbid")
 
     request_id: str
@@ -39,6 +51,8 @@ class PromotionRequest(BaseModel):
 
 
 class PromotionResponse(BaseModel):
+    """Describe the outcome of a model promotion request."""
+
     status: str
     model_name: str
     production_version: str | None

@@ -1,4 +1,10 @@
-"""Registry state endpoints."""
+"""Model registry state API endpoints.
+
+File summary:
+- Exposes read-only endpoints for current Production model state and registry history.
+- Prefers live MLflow registry state when it is available.
+- Falls back to the platform database mirror when MLflow cannot provide the state.
+"""
 
 from typing import Annotated, Any
 
@@ -18,6 +24,7 @@ RegistryServiceDep = Annotated[RegistryService, Depends(get_registry_service)]
 def registry_state(
     db: DbSessionDep, service: RegistryServiceDep
 ) -> RegistryStateResponse:
+    """Return the current Production model from MLflow or the platform mirror."""
     mlflow_model = service.get_current_production_model()
     if mlflow_model is not None:
         return RegistryStateResponse(
@@ -51,6 +58,7 @@ def registry_state(
 
 @router.get("/history")
 def registry_history(db: DbSessionDep, limit: int = 50) -> dict[str, list[dict[str, Any]]]:
+    """Return recent platform registry records and promotion audit entries."""
     records = (
         db.query(ModelRegistryRecord)
         .order_by(desc(ModelRegistryRecord.created_at))

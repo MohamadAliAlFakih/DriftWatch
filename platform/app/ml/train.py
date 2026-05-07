@@ -1,4 +1,12 @@
-"""Training CLI for DriftWatch's bank marketing model."""
+"""Training CLI for DriftWatch's bank marketing model.
+
+File summary:
+- Loads and cleans the bank marketing dataset.
+- Builds baseline sklearn pipelines and evaluates them with cross-validation.
+- Tunes the best baseline model family and selects the final model.
+- Saves serving artifacts: model, schema, metrics, threshold, metadata, and model card.
+- Logs runs to MLflow and registers the selected model version.
+"""
 
 from __future__ import annotations
 
@@ -310,6 +318,7 @@ def _attach_thresholds_and_log(
     test_size: float,
     min_recall: float,
 ) -> list[str]:
+    """Attach threshold metadata to candidate results and log each run to MLflow."""
     run_ids: list[str] = []
     for result in results:
         result["threshold"] = find_highest_threshold_meeting_recall(
@@ -349,6 +358,7 @@ def _log_final_registered_run(
     min_recall: float,
     registered_model_name: str,
 ) -> tuple[str, str]:
+    """Log the final selected model run and register it in MLflow."""
     with mlflow.start_run(run_name=f"final_registered_{best['name']}") as run:
         run_id = run.info.run_id
         mlflow.log_params(
@@ -394,6 +404,7 @@ def _run_params(
     test_size: float,
     min_recall: float,
 ) -> dict[str, Any]:
+    """Build the MLflow parameter dictionary for one training run."""
     model = result["pipeline"].named_steps["model"]
     return {
         "model_class": model.__class__.__name__,
@@ -420,6 +431,7 @@ def _run_params(
 
 
 def _cv_metrics(y_true: pd.Series, y_proba: np.ndarray, threshold: float) -> dict[str, float]:
+    """Compute cross-validation metrics at a chosen operating threshold."""
     y_pred = (y_proba >= threshold).astype(int)
     return {
         "train_auc": float(roc_auc_score(y_true, y_proba)),
@@ -432,6 +444,7 @@ def _cv_metrics(y_true: pd.Series, y_proba: np.ndarray, threshold: float) -> dic
 
 
 def _flatten_test_metrics(metrics: dict[str, Any], threshold: dict[str, float]) -> dict[str, float]:
+    """Convert nested final test metrics into flat MLflow metric keys."""
     return {
         "test_auc": float(metrics["auc"]),
         "test_f1": float(metrics["f1"]),
@@ -443,6 +456,7 @@ def _flatten_test_metrics(metrics: dict[str, Any], threshold: dict[str, float]) 
 
 
 def _candidate_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a compact candidate summary for selection error messages."""
     return [
         {
             "name": candidate["name"],

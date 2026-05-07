@@ -1,8 +1,14 @@
-"""SQLAlchemy engine/session helpers for the platform database."""
+"""SQLAlchemy engine and session helpers for the platform database.
 
-from sqlalchemy import create_engine
+File summary:
+- Builds the SQLAlchemy engine from `PLATFORM_DATABASE_URL`.
+- Caches the engine and sessionmaker so requests reuse connection setup.
+- Provides the FastAPI database dependency used by platform route handlers.
+"""
+
 from functools import lru_cache
 
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -24,6 +30,7 @@ def get_engine() -> Engine:
 
 @lru_cache(maxsize=1)
 def get_sessionmaker() -> sessionmaker[Session]:
+    """Return the cached session factory bound to the platform engine."""
     return sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
 
 

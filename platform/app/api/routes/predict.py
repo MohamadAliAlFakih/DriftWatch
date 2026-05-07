@@ -1,4 +1,10 @@
-"""Prediction endpoint."""
+"""Prediction API endpoint.
+
+File summary:
+- Exposes the `/api/v1/predict` endpoint used to score one request payload.
+- Delegates validation, model loading, prediction, and persistence to `PredictionService`.
+- Converts schema validation failures into a clear FastAPI 422 response.
+"""
 
 from typing import Annotated, Any
 
@@ -18,6 +24,7 @@ def predict(
     db: DbSessionDep,
     service: PredictionServiceDep,
 ) -> PredictionResponse:
+    """Validate one input payload, score it, save it, and return the prediction."""
     try:
         return service.predict(db, payload)
     except SchemaValidationError as exc:
@@ -31,4 +38,3 @@ def predict(
                 }
             },
         ) from exc
-

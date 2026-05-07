@@ -1,3 +1,9 @@
+# File summary:
+# - Builds the Docker image for the platform FastAPI service.
+# - Installs dependencies with `uv` from `platform/pyproject.toml` and `platform/uv.lock`.
+# - Copies the contracts package, Alembic files, and platform application code into the image.
+# - Starts Uvicorn on port 8000 inside the container.
+
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \

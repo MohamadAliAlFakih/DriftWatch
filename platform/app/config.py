@@ -1,4 +1,11 @@
-"""Application configuration loaded from the environment."""
+"""Application configuration loaded from environment variables.
+
+File summary:
+- Defines runtime settings for the platform API service.
+- Defines lighter ML training settings for notebooks and CLI training.
+- Reads values from `.env` while ignoring settings meant for other services.
+- Caches settings objects so repeated dependency calls do not reread the environment.
+"""
 
 from functools import lru_cache
 from typing import Literal
@@ -8,6 +15,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Hold platform API settings required for serving, drift, webhooks, and promotion."""
+
     # extra="ignore" so a shared .env at repo root validates against per-service
     # Settings (D-14, D-15, D-16). Deviation from Engineering Standards Ch. 5
     # is intentional and documented in the must_haves of this plan.
@@ -51,13 +60,12 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return the cached platform API settings object."""
     return Settings()
 
 
 class MLSettings(BaseSettings):
-    """Training-only settings that avoid requiring service secrets for the CLI.
-    This is for the ML training CLI and notebook. It intentionally needs fewer env vars, 
-    so the notebook/training pipeline can run without requiring all platform service secrets."""
+    """Hold training-only settings so the CLI and notebook do not need service secrets."""
 
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
@@ -74,4 +82,5 @@ class MLSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_ml_settings() -> MLSettings:
+    """Return the cached ML training settings object."""
     return MLSettings()

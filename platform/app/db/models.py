@@ -1,8 +1,10 @@
 """Platform-owned database models.
 
-The platform database stores serving, drift, registry mirror, and promotion
-audit state. MLflow has its own database and schema; do not add MLflow tables
-here.
+File summary:
+- Defines SQLAlchemy ORM tables owned by the platform service.
+- Stores served predictions, drift reference stats, drift reports, and drift alerts.
+- Mirrors relevant MLflow registry state for platform history and fallback reads.
+- Stores promotion audit logs separately from MLflow's own backend database.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ JsonType = JSON().with_variant(postgresql.JSONB, "postgresql")
 
 
 def utc_now() -> datetime:
-    """Timezone-aware timestamp default."""
+    """Return a timezone-aware UTC timestamp for database defaults."""
     return datetime.now(UTC)
 
 
@@ -90,7 +92,7 @@ class DriftReport(Base):
         DateTime(timezone=True), nullable=False, default=utc_now
     )
 
-    alerts: Mapped[list["DriftAlert"]] = relationship(back_populates="drift_report")
+    alerts: Mapped[list[DriftAlert]] = relationship(back_populates="drift_report")
 
 
 class DriftAlert(Base):
@@ -160,4 +162,3 @@ class PromotionAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
-

@@ -1,4 +1,10 @@
-"""Data cleaning tests for the bank marketing dataset."""
+"""Data cleaning tests for the bank marketing dataset.
+
+File summary:
+- Tests the project-specific bank marketing cleaning rules.
+- Verifies target conversion from yes/no to 1/0.
+- Verifies leakage and `pdays` sentinel handling.
+"""
 
 import pandas as pd
 
@@ -6,6 +12,7 @@ from app.ml.data import clean_bank_marketing_data
 
 
 def test_cleaning_applies_required_bank_marketing_rules() -> None:
+    """Verify cleaning drops leakage columns and creates required `pdays` flags."""
     raw = pd.DataFrame(
         {
             "age": [30, 40],

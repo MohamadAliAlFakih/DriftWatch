@@ -1,4 +1,10 @@
-"""Evaluation helpers for binary classifiers."""
+"""Evaluation helpers for binary classifiers.
+
+File summary:
+- Converts predicted probabilities into binary labels using a supplied threshold.
+- Computes the metric set used for model review and MLflow logging.
+- Returns metrics as plain dictionaries so they can be saved as JSON or logged.
+"""
 
 from __future__ import annotations
 

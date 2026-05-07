@@ -1,4 +1,11 @@
-"""Drift service tests."""
+"""Drift service tests.
+
+File summary:
+- Tests the PSI helper for shifted distributions.
+- Tests that small prediction windows do not create alerts.
+- Tests that severity changes create one webhook alert.
+- Uses an in-memory SQLite database so service behavior is isolated.
+"""
 
 from datetime import UTC, datetime
 
@@ -14,6 +21,7 @@ from app.services.webhook_service import WebhookService
 
 
 def _settings() -> Settings:
+    """Build minimal settings for drift service tests."""
     return Settings(
         platform_database_url="sqlite:///:memory:",
         mlflow_tracking_uri="http://mlflow:5001",
@@ -24,12 +32,14 @@ def _settings() -> Settings:
 
 
 def _db():
+    """Create an in-memory SQLite session with platform tables."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)()
 
 
 def test_psi_increases_for_shifted_distribution() -> None:
+    """Verify PSI becomes high when current data shifts away from reference data."""
     reference = np.array([1, 2, 3, 4, 5] * 20)
     current = np.array([10, 11, 12, 13, 14] * 20)
     value = psi(reference, current, [1, 2, 3, 4, 5, 15])
@@ -37,8 +47,17 @@ def test_psi_increases_for_shifted_distribution() -> None:
 
 
 def test_insufficient_data_does_not_emit_webhook() -> None:
+    """Verify drift checks with too few predictions do not create webhook alerts."""
     db = _db()
-    db.add(Prediction(model_name="m", input_json={"age": 1}, prediction=0, probability=0.1, threshold=0.5))
+    db.add(
+        Prediction(
+            model_name="m",
+            input_json={"age": 1},
+            prediction=0,
+            probability=0.1,
+            threshold=0.5,
+        )
+    )
     db.commit()
 
     result = DriftService(_settings()).check_drift(db)
@@ -48,9 +67,11 @@ def test_insufficient_data_does_not_emit_webhook() -> None:
 
 
 def test_severity_change_triggers_one_alert(monkeypatch) -> None:
+    """Verify one alert is sent when drift severity changes into alertable levels."""
     sent = []
 
-    def fake_send(self, alert):
+    async def fake_send(self, alert):
+        """Pretend webhook delivery succeeded without making a network call."""
         sent.append(alert.event_id)
         alert.status = "sent"
         alert.response_status = 200
@@ -60,7 +81,12 @@ def test_severity_change_triggers_one_alert(monkeypatch) -> None:
     db.add(
         ReferenceStatistics(
             model_name="driftwatch-bank-marketing",
-            numeric_stats={"age": {"values": [1, 2, 3, 4, 5] * 20, "bin_edges": [1, 2, 3, 4, 5, 15]}},
+            numeric_stats={
+                "age": {
+                    "values": [1, 2, 3, 4, 5] * 20,
+                    "bin_edges": [1, 2, 3, 4, 5, 15],
+                }
+            },
             categorical_stats={},
             output_stats={"0": 0.9, "1": 0.1},
             is_active=True,
@@ -97,4 +123,3 @@ def test_severity_change_triggers_one_alert(monkeypatch) -> None:
     assert first.alert is not None
     assert second.alert is None
     assert len(sent) == 1
-

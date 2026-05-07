@@ -1,4 +1,11 @@
-"""Small EDA helpers used by the training notebook."""
+"""Small EDA helpers used by the training notebook.
+
+File summary:
+- Provides quick summaries for columns, missing values, duplicates, and distributions.
+- Separates numeric and categorical feature lists for later modeling steps.
+- Computes target-rate summaries for categorical values during exploration.
+- Keeps notebook EDA logic reusable instead of burying it inside notebook cells.
+"""
 
 from __future__ import annotations
 

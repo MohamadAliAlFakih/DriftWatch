@@ -1,8 +1,10 @@
 """MLflow registry access for serving and promotion.
 
-MLflow's backend database stores experiments, runs, model-version metadata, and
-artifact URIs. The artifact root stores the files themselves, such as model.pkl,
-schema.json, threshold.json, and card.md.
+File summary:
+- Wraps MLflow registry calls used by platform serving and promotion.
+- Reads the current Production model alias or stage.
+- Loads registered sklearn models for prediction serving.
+- Fetches model version metadata, run metrics, and tags for audit records.
 """
 
 from __future__ import annotations
@@ -20,6 +22,8 @@ from app.config import Settings
 
 @dataclass(frozen=True)
 class RegistryModel:
+    """Represent the MLflow model version metadata the platform cares about."""
+
     model_name: str
     model_version: str
     model_uri: str
@@ -34,6 +38,7 @@ class RegistryService:
     """Small wrapper around MLflow's model registry client."""
 
     def __init__(self, settings: Settings) -> None:
+        """Create an MLflow client pointed at the configured tracking URI."""
         self.settings = settings
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
         self.client = MlflowClient(tracking_uri=settings.mlflow_tracking_uri)
@@ -69,6 +74,7 @@ class RegistryService:
     def get_model_version_details(
         self, model_name: str, model_version: str
     ) -> RegistryModel:
+        """Return metadata for a specific registered model version."""
         version = self.verify_model_version_exists(model_name, model_version)
         return self._to_registry_model(
             version,
@@ -121,6 +127,7 @@ class RegistryService:
     def _to_registry_model(
         self, version: ModelVersion, stage_or_alias: str, model_uri: str
     ) -> RegistryModel:
+        """Convert an MLflow `ModelVersion` object into the platform dataclass."""
         metrics: dict[str, float] = {}
         tags: dict[str, str] = {}
         if version.run_id:
@@ -140,4 +147,3 @@ class RegistryService:
             metrics=metrics,
             tags=tags,
         )
-

@@ -1,4 +1,10 @@
-"""Artifact helper tests."""
+"""Artifact helper tests.
+
+File summary:
+- Tests JSON artifact saving.
+- Tests MD5 hashing for dataset tracking.
+- Tests SHA-256 hashing for model artifact integrity.
+"""
 
 from pathlib import Path
 
@@ -6,6 +12,7 @@ from app.ml.artifacts import compute_file_md5, compute_file_sha256, save_json
 
 
 def test_save_json_and_hash_helpers(tmp_path: Path) -> None:
+    """Verify JSON saving and file hash helpers return stable results."""
     json_path = tmp_path / "metadata.json"
     text_path = tmp_path / "sample.txt"
 

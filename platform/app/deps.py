@@ -1,4 +1,10 @@
-"""FastAPI dependency providers."""
+"""FastAPI dependency providers for the platform service.
+
+File summary:
+- Defines reusable dependencies for settings, database sessions, and services.
+- Keeps route files small by constructing service objects here.
+- Lets FastAPI inject one dependency pattern into prediction, drift, registry, and promotion.
+"""
 
 from typing import Annotated
 
@@ -14,7 +20,7 @@ from app.services.registry_service import RegistryService
 
 
 def get_settings_dep() -> Settings:
-    """FastAPI dependency wrapping get_settings()."""
+    """Expose cached settings through FastAPI dependency injection."""
     return get_settings()
 
 
@@ -23,16 +29,20 @@ DbSessionDep = Annotated[Session, Depends(get_db_session)]
 
 
 def get_prediction_service(settings: SettingsDep) -> PredictionService:
+    """Create the prediction service for a request."""
     return PredictionService(settings)
 
 
 def get_drift_service(settings: SettingsDep) -> DriftService:
+    """Create the drift service for a request."""
     return DriftService(settings)
 
 
 def get_registry_service(settings: SettingsDep) -> RegistryService:
+    """Create the registry service for a request."""
     return RegistryService(settings)
 
 
 def get_promotion_service(settings: SettingsDep) -> PromotionService:
+    """Create the promotion service for a request."""
     return PromotionService(settings)
