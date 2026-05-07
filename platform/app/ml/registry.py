@@ -1,4 +1,10 @@
-"""Model registry orchestration for the selected best model."""
+"""Model registry orchestration for the selected best model.
+
+File summary:
+- Wraps the final MLflow model-registration step.
+- Registers only the chosen final model run, not every baseline candidate.
+- Returns the model version created by MLflow for downstream promotion flow.
+"""
 
 from __future__ import annotations
 
@@ -17,4 +23,3 @@ def register_best_model(
         model_artifact_path=model_artifact_path,
         registered_model_name=registered_model_name,
     )
-

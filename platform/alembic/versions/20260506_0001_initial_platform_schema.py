@@ -1,5 +1,11 @@
 """Initial platform schema.
 
+File summary:
+- Creates the first set of platform-owned database tables.
+- Stores prediction records, reference stats, drift reports, and drift alerts.
+- Stores model registry mirror records and promotion audit logs.
+- Drops the same tables in reverse dependency order during downgrade.
+
 Revision ID: platform_0001
 Revises:
 Create Date: 2026-05-06
@@ -18,6 +24,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """Create all initial platform database tables."""
     op.create_table(
         "predictions",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -112,6 +119,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Drop all initial platform database tables in reverse dependency order."""
     op.drop_table("promotion_audit_log")
     op.drop_table("model_registry_records")
     op.drop_table("drift_alerts")

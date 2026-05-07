@@ -1,4 +1,11 @@
-"""FastAPI application factory for the DriftWatch platform service."""
+"""FastAPI application factory for the DriftWatch platform service.
+
+File summary:
+- Creates the main FastAPI application object for the platform service.
+- Configures application startup and shutdown behavior through a lifespan hook.
+- Loads runtime settings and configures structured logging when the app starts.
+- Registers all platform API routers: health, prediction, drift, registry, and promotion.
+"""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,13 +20,13 @@ from app.core.logging import configure_logging, get_logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup/shutdown hook. Phase 0 wires nothing — singletons land here later."""
+    """Run platform startup setup before requests and shutdown logging when the app stops."""
     settings = get_settings()
     configure_logging(level=settings.log_level, env=settings.app_env)
     log = get_logger(__name__)
     log.info("platform_startup", env=settings.app_env)
     try:
-        yield
+        yield   # FastAPI starts handling requests
     finally:
         log.info("platform_shutdown")
 

@@ -1,4 +1,11 @@
-"""Prediction API models and schema-artifact validation."""
+"""Prediction API models and schema-artifact validation.
+
+File summary:
+- Defines the response returned by the prediction endpoint.
+- Defines custom validation errors for serving payload problems.
+- Loads `schema.json` from training artifacts to validate runtime prediction inputs.
+- Provides an example request model for API documentation.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PredictionResponse(BaseModel):
+    """Describe the prediction result returned to API callers."""
+
     prediction_id: str
     model_name: str
     model_version: str | None
@@ -24,6 +33,7 @@ class SchemaValidationError(ValueError):
     """Raised when a prediction payload does not match schema.json."""
 
     def __init__(self, details: dict[str, Any]) -> None:
+        """Store schema validation details and initialize the exception message."""
         self.details = details
         super().__init__("prediction payload does not match schema")
 
@@ -32,6 +42,8 @@ class SchemaValidator:
     """Small validator driven by the training-time schema artifact."""
 
     def __init__(self, schema_path: str | Path) -> None:
+        """Load the serving schema artifact and precompute validation lookup fields."""
+        
         self.schema_path = Path(schema_path)
         self.schema = json.loads(self.schema_path.read_text(encoding="utf-8"))
         self.features = self.schema["features"]
@@ -41,6 +53,7 @@ class SchemaValidator:
         self.excluded.add(self.schema.get("target_excluded", "y"))
 
     def validate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate and clean one raw prediction payload against the schema artifact."""
         missing = [name for name in self.required if name not in payload]
         unknown = sorted(set(payload) - set(self.required))
         excluded = sorted(set(payload) & self.excluded)
@@ -105,4 +118,3 @@ class ExamplePredictionRequest(BaseModel):
     pdays_was_minus_one: int
     never_contacted_flag: int
     pdays_clean: int
-

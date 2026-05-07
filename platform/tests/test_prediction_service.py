@@ -1,4 +1,10 @@
-"""Prediction service persistence test."""
+"""Prediction service persistence test.
+
+File summary:
+- Uses dummy model and validator objects to avoid loading real artifacts.
+- Tests that `PredictionService` returns a response model.
+- Verifies each prediction request is persisted to the database.
+"""
 
 from dataclasses import dataclass
 
@@ -15,23 +21,30 @@ from app.services.prediction_service import LoadedModel, PredictionService
 
 
 class DummyModel:
+    """Minimal model double that returns a fixed positive probability."""
+
     def predict_proba(self, frame):
+        """Return fixed class probabilities for one prediction call."""
         return np.array([[0.2, 0.8]])
 
 
 @dataclass
 class DummyValidator:
+    """Minimal schema validator double used by the prediction service test."""
+
     required: list[str]
 
     def validate(self, payload):
+        """Return the payload unchanged to keep the test focused on persistence."""
         return payload
 
 
 def test_prediction_logs_to_database(monkeypatch) -> None:
+    """Verify prediction results are returned and saved as database rows."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    db = Session()
+    session_factory = sessionmaker(bind=engine)
+    db = session_factory()
 
     settings = Settings(
         platform_database_url="sqlite:///:memory:",
@@ -53,4 +66,3 @@ def test_prediction_logs_to_database(monkeypatch) -> None:
     assert isinstance(result, PredictionResponse)
     assert result.prediction == 1
     assert db.query(Prediction).count() == 1
-

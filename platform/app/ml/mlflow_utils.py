@@ -1,4 +1,11 @@
-"""Thin MLflow helpers used by the training CLI and notebook."""
+"""Thin MLflow helpers used by the training CLI and notebook.
+
+File summary:
+- Configures the MLflow tracking URI and experiment.
+- Logs parameter, metric, model, and artifact data for training runs.
+- Registers the selected model artifact in the MLflow model registry.
+- Keeps direct MLflow calls centralized for the training pipeline.
+"""
 
 from __future__ import annotations
 
@@ -10,13 +17,7 @@ import mlflow.sklearn
 
 
 def setup_mlflow(tracking_uri: str, experiment_name: str) -> None:
-    """Point MLflow at the tracking server and select/create the experiment.
-
-    DriftWatch uses an MLflow server backed by Postgres. Clients
-    talk to the server over HTTP; they should not connect directly to the MLflow
-    database. The server stores artifact files under its configured artifact root
-    and stores only artifact metadata/URIs in Postgres.
-    """
+    """Point MLflow at the tracking server and select or create the experiment."""
     mlflow.set_tracking_uri(tracking_uri)
     existing = mlflow.get_experiment_by_name(experiment_name)
     if existing is None:
@@ -33,11 +34,7 @@ def log_experiment_run(
     artifact_dir: str | PathLike[str] | None = None,
     model_artifact_path: str = "model",
 ) -> str:
-    """Log one training run.
-
-    Models are optional here because baseline/tuning runs mainly need metrics.
-    The final selected run logs the actual sklearn model artifact for registry.
-    """
+    """Log one MLflow training run and return its run id."""
     with mlflow.start_run(run_name=run_name) as run:
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)

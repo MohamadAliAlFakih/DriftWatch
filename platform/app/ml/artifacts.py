@@ -1,4 +1,11 @@
-"""Artifact helpers for the model_v1 bundle."""
+"""Artifact helpers for the `model_v1` bundle.
+
+File summary:
+- Saves model and JSON artifacts needed by serving and review.
+- Computes hashes for dataset tracking and model integrity checks.
+- Captures an environment fingerprint so training runs are easier to reproduce.
+- Builds the Markdown model card stored alongside the selected model.
+"""
 
 from __future__ import annotations
 
@@ -129,6 +136,7 @@ def create_model_card(
 
 
 def _compute_hash(path: str | Path, digest: Any) -> str:
+    """Stream a file into the provided hash digest and return the hex value."""
     with Path(path).open("rb") as file:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)

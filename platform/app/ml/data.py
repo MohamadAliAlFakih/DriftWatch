@@ -1,4 +1,11 @@
-"""Data loading, cleaning, and splitting for the UCI Bank Marketing model."""
+"""Data loading, cleaning, and splitting for the UCI Bank Marketing model.
+
+File summary:
+- Loads the raw bank marketing CSV from disk.
+- Applies project-specific cleaning rules before training or drift reference creation.
+- Splits cleaned data into features and target.
+- Creates the stratified train/test split used by the training pipeline.
+"""
 
 from __future__ import annotations
 
@@ -70,7 +77,7 @@ def split_features_target(
     df: pd.DataFrame,
     target_col: str = TARGET_COL,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Separate model features from the binary target."""
+    """Separate model features from the binary target column."""
     if target_col not in df.columns:
         raise ValueError({"error": "missing_target_column", "target_col": target_col})
     return df.drop(columns=[target_col]), df[target_col].astype(int)

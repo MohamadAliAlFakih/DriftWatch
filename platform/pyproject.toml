@@ -1,3 +1,9 @@
+# File summary:
+# - Defines the Python package metadata for the platform service.
+# - Lists runtime dependencies for FastAPI, SQLAlchemy, MLflow, sklearn, drift stats, and logging.
+# - Lists developer dependencies for tests, linting, typing, and notebooks.
+# - Configures pytest, uv path dependencies, and Hatchling packaging.
+
 [project]
 name = "driftwatch-platform"
 version = "0.1.0"

@@ -1,4 +1,11 @@
-"""Preprocessing builders for sklearn model pipelines."""
+"""Preprocessing builders for sklearn model pipelines.
+
+File summary:
+- Builds the shared preprocessing step used by all candidate models.
+- Imputes numeric and categorical values with sklearn transformers.
+- Optionally scales numeric features for model families that benefit from scaling.
+- One-hot encodes categories while ignoring unseen categories at inference time.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +21,7 @@ def build_preprocessor(
     *,
     scale_numeric: bool = True,
 ) -> ColumnTransformer:
-    """Build a ColumnTransformer for numeric and categorical features.
-
-    ``unknown`` is not treated as missing; it remains a normal categorical value.
-    The categorical encoder ignores truly new categories at inference time.
-    """
+    """Build the ColumnTransformer for numeric and categorical model features."""
     numeric_steps: list[tuple[str, object]] = [
         ("imputer", SimpleImputer(strategy="median")),
     ]

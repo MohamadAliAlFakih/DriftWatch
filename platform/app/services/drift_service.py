@@ -1,8 +1,10 @@
 """Drift statistics and alerting.
 
-The flow mirrors the week 5 day 4 notebook: use a fixed-size recent window,
-compare against frozen reference distributions, compute PSI for numeric/output
-signals, and use categorical frequency tests for categorical features.
+File summary:
+- Builds or loads reference feature/output distributions from training data.
+- Compares recent prediction inputs and outputs against that reference window.
+- Computes numeric PSI, categorical chi-square drift, and output PSI.
+- Saves drift reports and sends webhook alerts when severity meaningfully changes.
 """
 
 from __future__ import annotations
@@ -37,10 +39,14 @@ ALERT_SEVERITIES = {"medium", "high", "critical"}
 
 
 class DriftService:
+    """Coordinate reference statistics, drift checks, report persistence, and alerting."""
+
     def __init__(self, settings: Settings) -> None:
+        """Store platform settings used by drift calculations and webhooks."""
         self.settings = settings
 
     def recompute_reference(self, db: Session) -> ReferenceStatsResponse:
+        """Rebuild active reference statistics from the configured training dataset."""
         raw = load_bank_marketing_data(self.settings.data_path)
         cleaned = clean_bank_marketing_data(raw)
         features = cleaned.drop(columns=["y"], errors="ignore")
@@ -92,6 +98,7 @@ class DriftService:
         )
 
     def check_drift(self, db: Session) -> DriftCheckResponse:
+        """Compare recent predictions to reference stats and optionally emit an alert."""
         predictions = (
             db.query(Prediction)
             .order_by(desc(Prediction.created_at))
@@ -166,6 +173,7 @@ class DriftService:
         )
 
     def list_reports(self, db: Session, limit: int = 25) -> list[dict[str, Any]]:
+        """Return recent drift reports in compact dictionary form."""
         rows = db.query(DriftReport).order_by(desc(DriftReport.created_at)).limit(limit).all()
         return [
             {
@@ -181,6 +189,7 @@ class DriftService:
         ]
 
     def _get_or_create_reference(self, db: Session) -> ReferenceStatistics:
+        """Return the active reference stats row, creating it when missing."""
         row = (
             db.query(ReferenceStatistics)
             .filter(ReferenceStatistics.is_active.is_(True))
@@ -201,6 +210,7 @@ class DriftService:
     def _numeric_psi(
         self, reference_stats: dict[str, Any], recent_inputs: pd.DataFrame
     ) -> dict[str, Any]:
+        """Compute PSI and severity for numeric features present in recent inputs."""
         out: dict[str, Any] = {}
         for column, stats in reference_stats.items():
             if column not in recent_inputs:
@@ -216,6 +226,7 @@ class DriftService:
     def _categorical_chi2(
         self, reference_stats: dict[str, Any], recent_inputs: pd.DataFrame
     ) -> dict[str, Any]:
+        """Compute chi-square drift flags for categorical features."""
         out: dict[str, Any] = {}
         for column, proportions in reference_stats.items():
             if column not in recent_inputs:
@@ -238,6 +249,7 @@ class DriftService:
     def _output_drift(
         self, reference_output: dict[str, float], predictions: list[Prediction]
     ) -> dict[str, Any]:
+        """Compute PSI and severity for the predicted output distribution."""
         current_values = np.array([p.prediction for p in predictions], dtype=int)
         ref_values: list[int] = []
         for key, proportion in reference_output.items():
@@ -254,6 +266,7 @@ class DriftService:
         categorical_chi2: dict[str, Any],
         output_drift: dict[str, Any],
     ) -> str:
+        """Collapse feature-level drift signals into one overall severity label."""
         severities = [item["severity"] for item in numeric_psi.values()]
         severities.append(output_drift.get("severity", "none"))
         drifted_cats = sum(1 for item in categorical_chi2.values() if item["drifted"])
@@ -266,6 +279,7 @@ class DriftService:
         return max(severities or ["none"], key=lambda item: SEVERITY_ORDER[item])
 
     def _psi_severity(self, value: float, *, output: bool = False) -> str:
+        """Map a PSI value to the configured severity thresholds."""
         if output and value >= self.settings.output_drift_psi_threshold:
             return "medium"
         if value >= self.settings.psi_high_threshold:
@@ -277,6 +291,7 @@ class DriftService:
         return "none"
 
     def _create_alert(self, db: Session, report: DriftReport) -> DriftAlert:
+        """Create and persist the webhook alert payload for one drift report."""
         event_id = f"drift_{uuid.uuid4().hex}"
         payload = {
             "contract_version": "v1",
@@ -325,4 +340,3 @@ def psi(reference: np.ndarray, current: np.ndarray, bin_edges: list[float]) -> f
     ref_p = np.clip(ref_p, eps, 1.0)
     cur_p = np.clip(cur_p, eps, 1.0)
     return float(np.sum((cur_p - ref_p) * np.log(cur_p / ref_p)))
-

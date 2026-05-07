@@ -1,4 +1,10 @@
-"""Prediction schema artifact generation."""
+"""Prediction schema artifact generation.
+
+File summary:
+- Builds the `schema.json` artifact used by the serving validator.
+- Excludes the target and leakage-prone columns from prediction inputs.
+- Captures required fields, data types, categorical allowed values, and JSON-schema shape.
+"""
 
 from __future__ import annotations
 

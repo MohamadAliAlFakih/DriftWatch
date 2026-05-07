@@ -1,4 +1,10 @@
-"""Operating-threshold tuning for recall-constrained decisions."""
+"""Operating-threshold tuning for recall-constrained decisions.
+
+File summary:
+- Searches probability thresholds produced by a classifier.
+- Selects the highest threshold that still meets the required minimum recall.
+- Returns threshold metadata separately from the sklearn model artifact.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +20,7 @@ def find_highest_threshold_meeting_recall(
     y_proba: np.ndarray,
     min_recall: float = 0.75,
 ) -> dict[str, float]:
-    """Find the highest threshold that still reaches the minimum recall.
-
-    The threshold is returned as metadata and is intentionally not embedded in
-    the sklearn pipeline. Serving should load the model and threshold separately.
-    """
+    """Find the highest threshold that still reaches the minimum recall."""
     if not 0 <= min_recall <= 1:
         raise ValueError({"error": "invalid_min_recall", "min_recall": min_recall})
 

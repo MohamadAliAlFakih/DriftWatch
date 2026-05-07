@@ -1,4 +1,10 @@
-"""Prediction schema tests."""
+"""Prediction schema tests.
+
+File summary:
+- Tests generation of the serving-time prediction schema artifact.
+- Verifies target and leakage columns are excluded.
+- Verifies categorical allowed values are captured.
+"""
 
 import pandas as pd
 
@@ -6,6 +12,7 @@ from app.ml.schema import infer_prediction_schema
 
 
 def test_schema_excludes_target_and_duration_and_captures_categories() -> None:
+    """Verify schema generation includes safe features and categorical values."""
     data = pd.DataFrame(
         {
             "age": [30, 40],

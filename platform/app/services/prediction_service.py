@@ -1,4 +1,11 @@
-"""Prediction serving and persistence."""
+"""Prediction serving and persistence.
+
+File summary:
+- Loads the current Production model from MLflow when available.
+- Falls back to local `model_v1` artifacts when MLflow Production is unavailable.
+- Validates incoming payloads against the saved serving schema.
+- Scores one payload, saves the prediction row, and returns the API response.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +30,8 @@ log = get_logger(__name__)
 
 @dataclass
 class LoadedModel:
+    """Bundle the model, metadata, threshold, and schema validator used for serving."""
+
     model: Any
     model_name: str
     model_version: str | None
@@ -69,10 +78,14 @@ def clear_model_cache() -> None:
 
 
 class PredictionService:
+    """Coordinate prediction validation, scoring, persistence, and response creation."""
+
     def __init__(self, settings: Settings) -> None:
+        """Store platform settings for prediction operations."""
         self.settings = settings
 
     def predict(self, db: Session, payload: dict[str, Any]) -> PredictionResponse:
+        """Validate, score, persist, and return one prediction request."""
         loaded = load_serving_model()
         clean_payload = loaded.schema_validator.validate(payload)
         frame = pd.DataFrame([clean_payload], columns=loaded.schema_validator.required)
@@ -105,5 +118,6 @@ class PredictionService:
 
 
 def _load_threshold(path: str) -> float:
+    """Load the operating threshold from the saved threshold artifact."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return float(data["threshold"])

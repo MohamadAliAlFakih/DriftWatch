@@ -1,4 +1,11 @@
-"""Promotion gate for moving a model to Production."""
+"""Promotion gate for moving a model to Production.
+
+File summary:
+- Validates promotion requests from the worker or agent flow.
+- Requires a shared platform token and a complete safety checklist.
+- Promotes an existing MLflow registered model version into Production.
+- Mirrors the accepted production model in the platform database and writes audit logs.
+"""
 
 from __future__ import annotations
 
@@ -24,20 +31,27 @@ REQUIRED_CHECKLIST = (
 )
 
 
-class PromotionRejected(ValueError):
+class PromotionRejected(ValueError):  # noqa: N818 - API uses this domain-specific name.
+    """Represent a promotion request that failed validation or registry checks."""
+
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        """Store rejection details and initialize the exception message."""
         self.details = details or {}
         super().__init__(message)
 
 
 class PromotionService:
+    """Coordinate token checks, checklist validation, MLflow promotion, and audit logging."""
+
     def __init__(self, settings: Settings) -> None:
+        """Store settings and create the MLflow registry service wrapper."""
         self.settings = settings
         self.registry = RegistryService(settings)
 
     def promote(
         self, db: Session, payload: PromotionRequest, token: str | None
     ) -> PromotionResponse:
+        """Validate and apply one idempotent model promotion request."""
         self._validate_token(token, self.settings.promotion_bearer_token)
         existing = (
             db.query(PromotionAuditLog)
@@ -83,10 +97,12 @@ class PromotionService:
         )
 
     def _validate_token(self, token: str | None, expected: SecretStr) -> None:
+        """Reject the promotion request when the shared platform token is missing or wrong."""
         if token != expected.get_secret_value():
             raise PromotionRejected("invalid platform token")
 
     def _validate_checklist(self, payload: PromotionRequest) -> None:
+        """Reject the promotion request when any required checklist item is false."""
         checklist = payload.checklist.model_dump()
         failed = [name for name in REQUIRED_CHECKLIST if checklist.get(name) is not True]
         if failed:
@@ -102,6 +118,7 @@ class PromotionService:
         model_uri: str,
         metadata: dict[str, Any],
     ) -> None:
+        """Mirror an accepted Production model in the platform database."""
         db.query(ModelRegistryRecord).filter(
             ModelRegistryRecord.model_name == payload.model_name,
             ModelRegistryRecord.is_production.is_(True),
@@ -138,6 +155,7 @@ class PromotionService:
         *,
         commit: bool = True,
     ) -> None:
+        """Insert one promotion audit row and optionally commit it immediately."""
         db.add(
             PromotionAuditLog(
                 request_id=payload.request_id,
@@ -159,6 +177,7 @@ class PromotionService:
 def _first_float(
     metrics: dict[str, Any], tags: dict[str, Any], *names: str
 ) -> float | None:
+    """Return the first numeric value found in MLflow metrics or tags."""
     for name in names:
         if name in metrics:
             return float(metrics[name])

@@ -1,4 +1,11 @@
-"""Alembic environment for the platform database only."""
+"""Alembic environment for the platform database only.
+
+File summary:
+- Configures Alembic to use the platform service database URL.
+- Imports platform ORM models so migration autogeneration can see table metadata.
+- Supports both offline SQL generation and online migration execution.
+- Keeps platform schema migrations separate from MLflow's database schema.
+"""
 
 from logging.config import fileConfig
 
@@ -24,6 +31,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    """Run Alembic migrations without opening a live database connection."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -37,6 +45,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    """Run Alembic migrations against a live platform database connection."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

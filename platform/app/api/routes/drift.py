@@ -1,4 +1,10 @@
-"""Drift endpoints."""
+"""Drift API endpoints.
+
+File summary:
+- Exposes endpoints for drift checks, drift report history, and reference stats.
+- Delegates actual drift calculations to `DriftService`.
+- Uses the database session dependency to read predictions and save reports.
+"""
 
 from typing import Annotated, Any
 
@@ -14,6 +20,7 @@ DriftServiceDep = Annotated[DriftService, Depends(get_drift_service)]
 
 @router.post("/check", response_model=DriftCheckResponse)
 def check_drift(db: DbSessionDep, service: DriftServiceDep) -> DriftCheckResponse:
+    """Run a drift check over the recent prediction window."""
     return service.check_drift(db)
 
 
@@ -21,6 +28,7 @@ def check_drift(db: DbSessionDep, service: DriftServiceDep) -> DriftCheckRespons
 def list_reports(
     db: DbSessionDep, service: DriftServiceDep, limit: int = 25
 ) -> list[dict[str, Any]]:
+    """Return recent saved drift reports for dashboard or debugging views."""
     return service.list_reports(db, limit=limit)
 
 
@@ -28,5 +36,5 @@ def list_reports(
 def recompute_reference(
     db: DbSessionDep, service: DriftServiceDep
 ) -> ReferenceStatsResponse:
+    """Rebuild the active reference distribution from the training dataset."""
     return service.recompute_reference(db)
-

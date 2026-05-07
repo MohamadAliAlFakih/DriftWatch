@@ -1,4 +1,10 @@
-"""Practical model tuning helpers."""
+"""Practical model tuning helpers.
+
+File summary:
+- Tunes only the selected baseline model family.
+- Uses sklearn search objects with stratified cross-validation.
+- Returns the tuned estimator, best parameters, CV AUC, and CV probabilities.
+"""
 
 from __future__ import annotations
 
