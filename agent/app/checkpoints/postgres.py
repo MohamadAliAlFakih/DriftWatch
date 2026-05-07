@@ -16,8 +16,12 @@ log = get_logger(__name__)
 
 # build async Postgres checkpointer; .setup() creates checkpoint tables idempotently
 async def build_checkpointer(settings: Settings) -> AsyncPostgresSaver:
-    # AsyncPostgresSaver expects a sync-style postgresql:// URL (it uses psycopg internally)
-    sync_url = settings.agent_database_url.replace("+asyncpg", "")
+    # AsyncPostgresSaver expects a plain postgresql:// URL (it uses psycopg internally).
+    # Strip any SQLAlchemy driver suffix (+psycopg, +asyncpg, +psycopg2) — psycopg's
+    # conninfo parser rejects "postgresql+xxx://" forms.
+    sync_url = settings.agent_database_url
+    for suffix in ("+psycopg", "+asyncpg", "+psycopg2"):
+        sync_url = sync_url.replace(suffix, "")
     saver_cm = AsyncPostgresSaver.from_conn_string(sync_url)
     # context-managed but we want it lifespan-scoped — manual aenter pattern; lifespan calls aexit on shutdown
     saver = await saver_cm.__aenter__()

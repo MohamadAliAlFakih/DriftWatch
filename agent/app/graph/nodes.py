@@ -160,14 +160,31 @@ async def action_node(state: InvestigationState, config: RunnableConfig) -> dict
     else:
         state_hil = state.hil_decision
 
-    # enqueue the slow job — Phase 4 owns the worker; here we just call enqueue with the contract.
-    # arq_pool is read off RunnableConfig too (None in tests; real pool in production lifespan).
+    # enqueue the slow job — D-03 idempotency via arq's _job_id, D-09 payload shape.
+    # arq_pool is read off RunnableConfig (None in tests; real ArqRedis pool in production lifespan).
     arq_pool = (config or {}).get("configurable", {}).get("arq_pool")
-    idempotency_key = f"{state.investigation_id}:{plan.action}:{plan.target_version}"
+    # D-03: deterministic job id == "{investigation_id}:{action}:{target_version}" — duplicate enqueues
+    # within keep_result_seconds (24h, see worker WorkerSettings.keep_result) return None from arq
+    job_id = f"{state.investigation_id}:{plan.action}:{plan.target_version}"
     if arq_pool is not None:
-        await arq_pool.enqueue_job(plan.action, idempotency_key=idempotency_key, plan=plan.model_dump(mode="json"))
+        # build D-09 payload — same shape across replay/retrain/rollback (rollback ignores fields it doesn't need)
+        enqueued = await arq_pool.enqueue_job(
+            plan.action,                                          # function name registered in WorkerSettings
+            _job_id=job_id,                                       # D-03: dupes within keep_result window return None
+            investigation_id=str(state.investigation_id),
+            model_name=state.drift_event.model_name,
+            target_version=plan.target_version,
+            triggered_by_event_id=state.drift_event.event_id,
+            requested_at=datetime.now(timezone.utc).isoformat(),
+        )
+        # arq returns None when the same _job_id is already in-flight (idempotency hit, D-03)
+        if enqueued is None:
+            log.info("enqueue_skipped_duplicate", investigation_id=state.investigation_id, job_id=job_id)
+        else:
+            log.info("enqueued", investigation_id=state.investigation_id, job_id=job_id, action=plan.action)
     else:
-        log.info("arq_pool_absent_skip_enqueue", investigation_id=state.investigation_id, idempotency_key=idempotency_key)
+        # tests / Redis-down branch — log so dashboards can spot it (D-10 None-guard fallback preserved)
+        log.info("arq_pool_absent_skip_enqueue", investigation_id=state.investigation_id, job_id=job_id)
 
     return {
         "recommended_action": plan,

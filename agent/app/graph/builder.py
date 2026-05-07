@@ -21,10 +21,11 @@ from app.graph.state import InvestigationState
 from app.graph.supervisor import route_supervisor
 
 
-# build and compile the supervisor graph
+# build and compile the supervisor graph; chat_model + arq_pool ride on the compiled object
 def build_graph(
     checkpointer: BaseCheckpointSaver,
     chat_model: BaseChatModel,
+    arq_pool=None,
 ) -> CompiledStateGraph:
     graph: StateGraph = StateGraph(InvestigationState)
     graph.add_node("triage", triage_node)
@@ -41,9 +42,11 @@ def build_graph(
     # after comms: terminal
     graph.add_edge("comms", END)
 
-    # compile the graph; chat_model is attached as an attribute so graph_runner can read it
-    # and inject it into per-call config (with_config produces a RunnableBinding which loses
-    # CompiledStateGraph methods like aget_state — keep the compiled object intact instead)
+    # compile the graph; chat_model + arq_pool are attached as attributes so graph_runner
+    # can read them and inject into per-call config (with_config produces a RunnableBinding
+    # which loses CompiledStateGraph methods like aget_state — keep the compiled object intact)
     compiled = graph.compile(checkpointer=checkpointer)
     compiled.chat_model = chat_model  # type: ignore[attr-defined]
+    # attach arq_pool to compiled graph so graph_runner can read it (mirror of chat_model pattern)
+    compiled.arq_pool = arq_pool  # type: ignore[attr-defined]
     return compiled
