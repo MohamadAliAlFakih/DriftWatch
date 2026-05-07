@@ -364,7 +364,7 @@ def _log_final_registered_run(
         mlflow.log_metrics(_flatten_test_metrics(metrics, best["threshold"]))
         model_info = mlflow.sklearn.log_model(
             best["pipeline"],
-            name=MODEL_ARTIFACT_PATH,
+            artifact_path=MODEL_ARTIFACT_PATH,
             registered_model_name=registered_model_name,
         )
         if model_info.registered_model_version is None:

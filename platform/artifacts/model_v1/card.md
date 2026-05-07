@@ -77,10 +77,10 @@
 ## Environment Fingerprint
 ```json
 {
-  "created_at": "2026-05-06T01:24:56.419498+00:00",
+  "created_at": "2026-05-07T02:05:10.442411+00:00",
   "packages": {
     "joblib": "1.5.3",
-    "mlflow": "3.12.0",
+    "mlflow": "2.16.2",
     "numpy": "2.4.4",
     "pandas": "2.3.3",
     "sklearn": "1.8.0"
