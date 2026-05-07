@@ -93,11 +93,11 @@ async def test_hil_approve_resumes_and_calls_promote(
     # graph completed comms after the approval branch
     assert data["current_node"] in ("done", "comms")
 
-    # let the BackgroundTask call platform.promote() — single call expected
+    # agent no longer calls /registry/promote on approve — the worker (Phase 4) does
     await asyncio.sleep(0.05)
     promote_calls = [c for c in http_calls if c["url"].endswith("/registry/promote")]
-    assert len(promote_calls) == 1, (
-        f"expected 1 promote call, got {len(promote_calls)}"
+    assert len(promote_calls) == 0, (
+        f"agent should NOT call /registry/promote on approve; worker handles it. got {len(promote_calls)}"
     )
 
 
