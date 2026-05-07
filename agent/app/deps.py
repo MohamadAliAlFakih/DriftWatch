@@ -41,3 +41,15 @@ def get_http_client(request: Request) -> httpx.AsyncClient:
 # return the lifespan-built sessionmaker (used by background tasks that outlive the request)
 def get_sessionmaker(request: Request) -> async_sessionmaker:
     return request.app.state.sessionmaker
+
+
+# return the lifespan-built arq pool (None if Redis was unreachable on boot — D-10)
+def get_arq_pool(request: Request):
+    """Return app.state.arq_pool (ArqRedis | None).
+
+    No type annotation on the return so tests can substitute a FakeArqPool without
+    import gymnastics. Routers that depend on this provider should treat None as
+    "DLQ unavailable / cannot enqueue" — the dlq_repo + action_node both handle that.
+    """
+    # getattr fallback so tests that build a bare FastAPI app (no arq_pool in lifespan) still work
+    return getattr(request.app.state, "arq_pool", None)

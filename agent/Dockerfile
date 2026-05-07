@@ -17,6 +17,9 @@ COPY agent/uv.lock /app/uv.lock
 RUN uv sync --frozen --no-dev
 
 COPY agent/app /app/app
+# include Alembic config + migrations so `alembic upgrade head` works inside the container
+COPY agent/alembic.ini /app/alembic.ini
+COPY agent/alembic /app/alembic
 
 EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

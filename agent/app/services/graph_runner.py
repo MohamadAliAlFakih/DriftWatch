@@ -35,11 +35,13 @@ async def start_investigation(
     drift_event: DriftEventV1,
 ) -> None:
     # thread_id == investigation_id (D-02) — checkpointer keys state on this id
-    # merge chat_model from the compiled graph (set by builder) into per-call config so nodes can read it
+    # merge chat_model + arq_pool from the compiled graph (set by builder) into per-call config
+    # so nodes can read them (action_node enqueues via arq_pool, all nodes use chat_model)
     config = {
         "configurable": {
             "thread_id": str(investigation_id),
             "chat_model": getattr(graph, "chat_model", None),
+            "arq_pool": getattr(graph, "arq_pool", None),
         }
     }
     now = datetime.now(timezone.utc)
@@ -79,11 +81,13 @@ async def resume_investigation(
     payload: dict[str, Any],
 ) -> InvestigationState | None:
     # thread_id == investigation_id (D-02) — same key used in start_investigation
-    # merge chat_model from the compiled graph (set by builder) into per-call config so nodes can read it
+    # merge chat_model + arq_pool from the compiled graph (set by builder) into per-call config
+    # so the action_node enqueue branch (post-HIL approval) sees the live RedisPool
     config = {
         "configurable": {
             "thread_id": str(investigation_id),
             "chat_model": getattr(graph, "chat_model", None),
+            "arq_pool": getattr(graph, "arq_pool", None),
         }
     }
     try:

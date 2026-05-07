@@ -21,6 +21,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 
 from app.api import health, hil, investigations, webhooks
+from app.api import queue as queue_api
 from app.checkpoints.postgres import build_checkpointer
 from app.config import get_settings
 from app.core.logging import configure_logging, get_logger, request_id_ctx
@@ -28,6 +29,7 @@ from app.db.base import build_engine, build_sessionmaker
 from app.graph.builder import build_graph
 from app.graph.llm import build_chat_model
 from app.services import investigations as investigations_service
+from app.services.arq_pool import build_arq_pool
 from app.services.graph_runner import start_investigation
 from app.services.platform_client import recent_events
 
@@ -58,8 +60,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     http_client = httpx.AsyncClient()
     app.state.http_client = http_client
 
-    # compile the graph with checkpointer + chat_model wired in
-    graph = build_graph(checkpointer=checkpointer, chat_model=chat_model)
+    # build arq RedisPool — Phase 4 wiring (D-10). action_node enqueues jobs through this pool.
+    try:
+        # open the pool eagerly; failure here means Redis is unreachable on boot
+        arq_pool = await build_arq_pool(settings.redis_url)
+    except Exception as exc:
+        # Redis being down should not crash the agent — log and continue with arq_pool=None.
+        # action_node has a None-guard fallback that logs the would-be enqueue (Plan 02 keeps the guard).
+        log.warning("arq_pool_unavailable", error=str(exc))
+        arq_pool = None
+    app.state.arq_pool = arq_pool
+
+    # compile the graph with checkpointer + chat_model + arq_pool wired in
+    graph = build_graph(checkpointer=checkpointer, chat_model=chat_model, arq_pool=arq_pool)
     app.state.graph = graph
 
     log.info("agent_ready")
@@ -102,8 +115,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:
             # swallow shutdown errors — we still want to close the http client + engine
             pass
-        # close outbound http pool, then drop the SQL engine connections
+        # close outbound http pool first so in-flight requests drain before the engine goes
         await http_client.aclose()
+        # close the arq pool — arq's ArqRedis exposes .close(); skip if it failed to build
+        try:
+            if arq_pool is not None:
+                await arq_pool.close(close_connection_pool=True)
+        except Exception:
+            # swallow shutdown errors so engine.dispose still runs
+            pass
+        # drop the SQL engine connections last
         await engine.dispose()
 
 
@@ -128,8 +149,10 @@ async def request_id_middleware(
     return response
 
 
-# mount routers — health stays from Phase 0; webhooks/investigations/hil are new in Plan 02
+# mount routers — health stays from Phase 0; webhooks/investigations/hil added in Phase 3;
+# queue (GET /queue/dlq) added in Phase 4 Plan 02 (D-11)
 app.include_router(health.router)
 app.include_router(webhooks.router)
 app.include_router(investigations.router)
 app.include_router(hil.router)
+app.include_router(queue_api.router)
