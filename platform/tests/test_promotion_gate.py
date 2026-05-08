@@ -53,7 +53,7 @@ def _settings() -> Settings:
     """Build minimal settings for promotion service tests."""
     return Settings(
         platform_database_url="sqlite:///:memory:",
-        mlflow_tracking_uri="http://mlflow:5001",
+        mlflow_tracking_uri="http://mlflow:5000",
         webhook_hmac_secret="secret",
         promotion_bearer_token="token",
     )

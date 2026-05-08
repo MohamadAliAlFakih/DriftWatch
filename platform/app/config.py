@@ -80,7 +80,7 @@ class MLSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
     data_path: str = "platform/data/bank-additional-full.csv"
-    mlflow_tracking_uri: str = "http://localhost:5001"
+    mlflow_tracking_uri: str = "http://localhost:5000"
     mlflow_experiment_name: str = "DriftWatch Bank Marketing"
     mlflow_registered_model_name: str = "driftwatch-bank-marketing"
     artifact_dir: str = "platform/artifacts"

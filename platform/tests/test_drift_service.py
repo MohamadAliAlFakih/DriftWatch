@@ -24,7 +24,7 @@ def _settings() -> Settings:
     """Build minimal settings for drift service tests."""
     return Settings(
         platform_database_url="sqlite:///:memory:",
-        mlflow_tracking_uri="http://mlflow:5001",
+        mlflow_tracking_uri="http://mlflow:5000",
         webhook_hmac_secret="secret",
         drift_min_window_size=3,
         drift_window_size=3,
