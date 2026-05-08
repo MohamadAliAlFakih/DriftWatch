@@ -29,7 +29,7 @@ def test_promote_uses_mlflow_alias_call() -> None:
     """Verify registry promotion sets the configured MLflow model alias."""
     settings = Settings(
         platform_database_url="sqlite:///:memory:",
-        mlflow_tracking_uri="http://mlflow:5001",
+        mlflow_tracking_uri="http://mlflow:5000",
         webhook_hmac_secret="secret",
         mlflow_model_alias="Production",
     )
@@ -46,7 +46,7 @@ def test_fallback_model_uses_latest_non_production_version() -> None:
     """Verify Production is skipped when choosing a registry fallback model."""
     settings = Settings(
         platform_database_url="sqlite:///:memory:",
-        mlflow_tracking_uri="http://mlflow:5001",
+        mlflow_tracking_uri="http://mlflow:5000",
         webhook_hmac_secret="secret",
         mlflow_model_alias="Production",
     )

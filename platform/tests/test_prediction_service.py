@@ -48,7 +48,7 @@ def test_prediction_logs_to_database(monkeypatch) -> None:
 
     settings = Settings(
         platform_database_url="sqlite:///:memory:",
-        mlflow_tracking_uri="http://mlflow:5001",
+        mlflow_tracking_uri="http://mlflow:5000",
         webhook_hmac_secret="secret",
     )
     loaded = LoadedModel(

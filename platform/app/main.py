@@ -32,10 +32,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(level=settings.log_level, env=settings.app_env)
     log = get_logger(__name__)
 
-    # why registry service needed to be singlton? because it holds the MLflow client which is thread-safe and can be reused across requests. 
+    # Keep one registry service for the app lifespan so the MLflow client is reused across requests.
     registry_service = RegistryService(settings)
 
-    # how webhook_client is passed to the webhook service? by creating the webhook service with the client as a parameter, and then storing the webhook service on the app state, so it can be accessed later by other services that need to send webhooks.
+    # Share one HTTP client with the webhook service and expose the service through app state.
     webhook_client = httpx.AsyncClient(timeout=settings.webhook_timeout_seconds)
     webhook_service = WebhookService(settings, client=webhook_client)
 
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.registry_service = registry_service
     app.state.webhook_service = webhook_service
 
-    # what is happening here exactly? we are creating the prediction service and promotion service with the registry service and webhook service, and then storing them on the app state, so they can be accessed later by the API routes that need to use them.
+    # Store request-facing services on app state so API routes can reuse the same dependencies.
     app.state.prediction_service = PredictionService(settings, registry_service)
     app.state.drift_service = DriftService(settings, webhook_service)
     app.state.promotion_service = PromotionService(settings, registry_service)
