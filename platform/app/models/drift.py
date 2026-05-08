@@ -32,3 +32,11 @@ class ReferenceStatsResponse(BaseModel):
     model_version: str | None
     numeric_features: list[str]
     categorical_features: list[str]
+
+
+class DemoResetResponse(BaseModel):
+    """Describe how many demo drift rows were cleared."""
+
+    deleted_predictions: int
+    deleted_drift_reports: int
+    deleted_drift_alerts: int

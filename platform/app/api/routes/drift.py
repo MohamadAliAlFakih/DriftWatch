@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 
 from app.deps import DbSessionDep, get_drift_service
-from app.models.drift import DriftCheckResponse, ReferenceStatsResponse
+from app.models.drift import DemoResetResponse, DriftCheckResponse, ReferenceStatsResponse
 from app.services.drift_service import DriftService
 
 router = APIRouter(prefix="/api/v1/drift", tags=["drift"])
@@ -38,3 +38,9 @@ def recompute_reference(
 ) -> ReferenceStatsResponse:
     """Rebuild the active reference distribution from the training dataset."""
     return service.recompute_reference(db)
+
+
+@router.post("/demo/reset", response_model=DemoResetResponse)
+def reset_demo_state(db: DbSessionDep, service: DriftServiceDep) -> DemoResetResponse:
+    """Clear prediction and drift report state so demo traffic starts fresh."""
+    return service.reset_demo_state(db)

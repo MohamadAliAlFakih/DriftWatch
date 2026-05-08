@@ -10,7 +10,6 @@ File summary:
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -25,7 +24,7 @@ from app.config import Settings
 from app.db.models import DriftAlert, DriftReport, Prediction, ReferenceStatistics
 from app.ml.artifacts import compute_file_md5
 from app.ml.data import clean_bank_marketing_data, load_bank_marketing_data
-from app.models.drift import DriftCheckResponse, ReferenceStatsResponse
+from app.models.drift import DemoResetResponse, DriftCheckResponse, ReferenceStatsResponse
 from app.services.webhook_service import WebhookService
 
 SEVERITY_ORDER = {
@@ -126,7 +125,7 @@ class DriftService:
         )
         predictions = list(reversed(predictions))
 
-        # fetch the most recent drift report to compare severity and avoid alert fatigue on startup or small fluctuations
+        # Compare against the most recent report to avoid alert fatigue on small fluctuations.
         previous = db.query(DriftReport).order_by(desc(DriftReport.created_at)).first()
         previous_severity = previous.severity if previous else None
 
@@ -170,7 +169,7 @@ class DriftService:
             and severity != previous_severity
             and previous_severity != "insufficient_data"
         ):
-            # create the alert in the database before sending the webhook so we have a record of it and can update status based on the response
+            # Create the alert first so delivery status can be recorded after the webhook.
             alert = self._create_alert(db, report)
 
             # Sync delivery — the route is sync, and asyncio.run() here would
@@ -212,6 +211,18 @@ class DriftService:
             }
             for row in rows
         ]
+
+    def reset_demo_state(self, db: Session) -> DemoResetResponse:
+        """Clear prediction-window and drift-check state for a fresh demo run."""
+        deleted_alerts = db.query(DriftAlert).delete(synchronize_session=False)
+        deleted_reports = db.query(DriftReport).delete(synchronize_session=False)
+        deleted_predictions = db.query(Prediction).delete(synchronize_session=False)
+        db.commit()
+        return DemoResetResponse(
+            deleted_predictions=deleted_predictions,
+            deleted_drift_reports=deleted_reports,
+            deleted_drift_alerts=deleted_alerts,
+        )
 
     def _get_or_create_reference(self, db: Session) -> ReferenceStatistics:
         """Return the active reference stats row, creating it when missing."""

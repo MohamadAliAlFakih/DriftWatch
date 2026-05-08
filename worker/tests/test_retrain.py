@@ -1,14 +1,12 @@
-"""D-07 retrain — re-fit Pipeline on tiny stub data, register new MLflow version, write retrain_result.
+"""D-07 retrain — run shared ML pipeline, register new version, write retrain_result.
 
 Verifies the retrain tool's full happy path with NO live MLflow / no live Postgres /
-no on-disk CSV. The conftest installs `ml.data` / `ml.preprocessing` / `ml.eda` stubs
-so retrain can import them at module-load time and run end-to-end against an in-memory
-toy DataFrame (no real CSV written to disk per project rule).
+no on-disk CSV. The conftest installs an `ml.train` stub so retrain can delegate
+to the same pipeline surface used by the platform notebook.
 
 Side effects we assert:
-- mlflow.set_tracking_uri called with settings.mlflow_tracking_uri
-- mlflow.sklearn.log_model called with registered_model_name == model_name (bank-cls)
-- log_model returns a result with registered_model_version == "42"
+- run_training_pipeline called with registered_model_name == model_name (bank-cls)
+- run_training_pipeline returns registered_model_version == "42"
 - investigations.state.retrain_result.new_version == 42 (cast to int by retrain)
 """
 
@@ -28,6 +26,9 @@ async def test_retrain_writes_new_version(
 
     # importing retrain AFTER conftest's ml.* stubs are installed (autouse via _install_ml_stubs)
     from tools.retrain import retrain
+    from ml.train import run_training_pipeline
+
+    run_training_pipeline.calls.clear()
 
     await retrain(
         ctx,
@@ -38,18 +39,14 @@ async def test_retrain_writes_new_version(
         requested_at="2026-05-06T00:00:00Z",
     )
 
-    # mlflow side effects: tracking URI set + log_model called with our model_name
-    rec = ctx["_mlflow"]
-    assert rec["uri"] == "http://mlflow-test:5000"
-    # exactly one model logged + registered under bank-cls
-    assert len(rec["models_logged"]) == 1
-    assert rec["models_logged"][0]["registered_model_name"] == "bank-cls"
-
-    # tags: investigation_id + triggered_by_event_id + model_name recorded by retrain
-    tag_names = {t["name"] for t in rec["tags"]}
-    assert "investigation_id" in tag_names
-    assert "triggered_by_event_id" in tag_names
-    assert "model_name" in tag_names
+    # retrain delegates to the shared platform training pipeline.
+    assert len(run_training_pipeline.calls) == 1
+    call = run_training_pipeline.calls[0]
+    assert call["mlflow_tracking_uri"] == "http://mlflow-test:5000"
+    assert call["registered_model_name"] == "bank-cls"
+    assert call["train_size"] == 0.60
+    assert call["validation_size"] == 0.20
+    assert call["test_size"] == 0.20
 
     # investigations.state.retrain_result.new_version == 42 (mock returns version="42", cast to int)
     from db.models import Investigation
@@ -61,6 +58,7 @@ async def test_retrain_writes_new_version(
         result = row.state["retrain_result"]
         assert result["new_version"] == 42
         assert result["mlflow_run_id"] == "test-run-id"
+        assert result["threshold"]["threshold"] == 0.5
         assert "summary" in result
         assert "completed_at" in result
 

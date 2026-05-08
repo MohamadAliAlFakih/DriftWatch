@@ -25,32 +25,58 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
+from mlflow.tracking import MlflowClient
 
-from app.config import get_ml_settings
-from app.ml.artifacts import (
-    compute_file_md5,
-    compute_file_sha256,
-    create_environment_fingerprint,
-    create_model_card,
-    save_json,
-    save_model_joblib,
-)
-from app.ml.data import (
-    clean_bank_marketing_data,
-    load_bank_marketing_data,
-    make_train_validation_test_split,
-    split_features_target,
-)
-from app.ml.eda import get_numeric_categorical_columns
-from app.ml.evaluate import evaluate_classifier
-from app.ml.mlflow_utils import log_experiment_run, setup_mlflow
-from app.ml.preprocessing import build_preprocessor
-from app.ml.schema import infer_prediction_schema
-from app.ml.threshold import find_highest_threshold_meeting_recall
-from app.ml.tune import tune_selected_pipeline
+try:
+    from app.config import get_ml_settings
+    from app.ml.artifacts import (
+        compute_file_md5,
+        compute_file_sha256,
+        create_environment_fingerprint,
+        create_model_card,
+        save_json,
+        save_model_joblib,
+    )
+    from app.ml.data import (
+        clean_bank_marketing_data,
+        load_bank_marketing_data,
+        make_train_validation_test_split,
+        split_features_target,
+    )
+    from app.ml.eda import get_numeric_categorical_columns
+    from app.ml.evaluate import evaluate_classifier
+    from app.ml.mlflow_utils import log_experiment_run, setup_mlflow
+    from app.ml.preprocessing import build_preprocessor
+    from app.ml.schema import infer_prediction_schema
+    from app.ml.threshold import find_highest_threshold_meeting_recall
+    from app.ml.tune import tune_selected_pipeline
+except ImportError:
+    get_ml_settings = None
+    from ml.artifacts import (  # type: ignore[no-redef]
+        compute_file_md5,
+        compute_file_sha256,
+        create_environment_fingerprint,
+        create_model_card,
+        save_json,
+        save_model_joblib,
+    )
+    from ml.data import (  # type: ignore[no-redef]
+        clean_bank_marketing_data,
+        load_bank_marketing_data,
+        make_train_validation_test_split,
+        split_features_target,
+    )
+    from ml.eda import get_numeric_categorical_columns  # type: ignore[no-redef]
+    from ml.evaluate import evaluate_classifier  # type: ignore[no-redef]
+    from ml.mlflow_utils import log_experiment_run, setup_mlflow  # type: ignore[no-redef]
+    from ml.preprocessing import build_preprocessor  # type: ignore[no-redef]
+    from ml.schema import infer_prediction_schema  # type: ignore[no-redef]
+    from ml.threshold import find_highest_threshold_meeting_recall  # type: ignore[no-redef]
+    from ml.tune import tune_selected_pipeline  # type: ignore[no-redef]
 
 LOGGER = logging.getLogger(__name__)
 MODEL_ARTIFACT_PATH = "model"
+DEFAULT_MODEL_ALIAS = "Default"
 
 
 def build_candidate_pipelines(
@@ -330,6 +356,7 @@ def run_training_pipeline(
 
     return {
         "best_model": best["name"],
+        "final_run_id": _final_run_id,
         "registered_version": registered_version,
         "artifact_dir": str(artifact_dir),
         "threshold": best["threshold"],
@@ -450,8 +477,44 @@ def _log_final_registered_run(
         run_metadata["mlflow_model_uri"] = model_info.model_uri
         save_json(run_metadata, artifact_dir / "run_metadata.json")
         mlflow.log_artifacts(str(artifact_dir))
+        _mark_registered_candidate(
+            model_name=registered_model_name,
+            model_version=registered_version,
+            run_metadata=run_metadata,
+            metrics=metrics,
+            threshold=best["threshold"],
+        )
 
     return run_id, registered_version
+
+
+def _mark_registered_candidate(
+    *,
+    model_name: str,
+    model_version: str,
+    run_metadata: dict[str, Any],
+    metrics: dict[str, Any],
+    threshold: dict[str, float],
+) -> None:
+    """Mark a newly registered version as the latest non-Production candidate."""
+    client = MlflowClient()
+    tags = {
+        "lifecycle_status": "candidate",
+        "model_artifact_sha256": str(run_metadata["model_artifact_sha256"]),
+        "schema_artifact_path": "schema.json",
+        "threshold_artifact_path": "threshold.json",
+        "card_artifact_path": "card.md",
+        "metrics_artifact_path": "metrics.json",
+        "run_metadata_artifact_path": "run_metadata.json",
+        "operating_threshold": str(threshold["threshold"]),
+        "test_auc": str(metrics["auc"]),
+        "test_f1": str(metrics["f1"]),
+        "test_precision": str(metrics["precision"]),
+        "test_recall": str(metrics["recall"]),
+    }
+    for key, value in tags.items():
+        client.set_model_version_tag(model_name, model_version, key, value)
+    client.set_registered_model_alias(model_name, DEFAULT_MODEL_ALIAS, model_version)
 
 
 def _run_params(
@@ -547,6 +610,8 @@ def _resolve_service_path(path: str | Path) -> Path:
 
 def main() -> None:
     """Run the training CLI with environment-backed settings."""
+    if get_ml_settings is None:
+        raise RuntimeError("training CLI requires the platform app.config module")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = get_ml_settings()
     summary = run_training_pipeline(

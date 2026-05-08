@@ -30,6 +30,11 @@ REQUIRED_CHECKLIST = (
     "rollback_plan_exists",
     "artifact_triple_exists",
 )
+PROMOTION_METRIC_TOLERANCES = {
+    "test_auc": 0.02,
+    "test_f1": 0.02,
+    "test_recall": 0.0,
+}
 
 
 class PromotionRejected(ValueError):  # noqa: N818 - API uses this domain-specific name.
@@ -90,9 +95,11 @@ class PromotionService:
             details = self.registry.get_model_version_details(
                 payload.model_name, payload.model_version
             )
+            self.registry.validate_required_artifacts(payload.model_name, payload.model_version)
             metadata = self.registry.get_model_artifacts_metadata(
                 payload.model_name, payload.model_version
             )
+            self._validate_metrics(metadata, previous)
             self.registry.promote_model_version(payload.model_name, payload.model_version)
             self._record_accepted(db, payload, details.model_uri, metadata)
             clear_model_cache()
@@ -125,6 +132,56 @@ class PromotionService:
                 {"failed_items": failed},
             )
 
+    def _validate_metrics(self, metadata: dict[str, Any], previous: Any | None) -> None:
+        """Reject candidates that fail recall or regress against current Production."""
+        candidate_recall = _metadata_float(metadata, "test_recall", "recall")
+        if candidate_recall is None:
+            raise PromotionRejected(
+                "promotion metrics unavailable",
+                {"missing_metrics": ["test_recall"]},
+            )
+        if candidate_recall < self.settings.min_recall:
+            raise PromotionRejected(
+                "candidate recall is below the required operating floor",
+                {
+                    "candidate_recall": candidate_recall,
+                    "min_recall": self.settings.min_recall,
+                },
+            )
+        if previous is None:
+            return
+
+        production_metadata = self.registry.get_model_artifacts_metadata(
+            previous.model_name,
+            previous.model_version,
+        )
+        regressions: dict[str, dict[str, float]] = {}
+        for metric_name, tolerance in PROMOTION_METRIC_TOLERANCES.items():
+            candidate_value = _metadata_float(metadata, metric_name, metric_name.removeprefix("test_"))
+            production_value = _metadata_float(
+                production_metadata,
+                metric_name,
+                metric_name.removeprefix("test_"),
+            )
+            if candidate_value is None:
+                raise PromotionRejected(
+                    "promotion metrics unavailable",
+                    {"missing_metrics": [metric_name]},
+                )
+            if production_value is None:
+                continue
+            if candidate_value < production_value - tolerance:
+                regressions[metric_name] = {
+                    "candidate": candidate_value,
+                    "production": production_value,
+                    "allowed_drop": tolerance,
+                }
+        if regressions:
+            raise PromotionRejected(
+                "candidate metrics regress against current Production",
+                {"regressions": regressions},
+            )
+
     def _record_accepted(
         self,
         db: Session,
@@ -145,7 +202,7 @@ class PromotionService:
             model_version=payload.model_version,
             model_uri=model_uri or payload.model_uri,
             stage_or_alias=self.settings.mlflow_model_alias,
-            threshold=_first_float(metrics, tags, "threshold"),
+            threshold=_first_float(metrics, tags, "operating_threshold", "threshold"),
             test_auc=_first_float(metrics, tags, "test_auc", "auc"),
             test_f1=_first_float(metrics, tags, "test_f1", "f1"),
             test_precision=_first_float(metrics, tags, "test_precision", "precision"),
@@ -201,3 +258,8 @@ def _first_float(
             except ValueError:
                 return None
     return None
+
+
+def _metadata_float(metadata: dict[str, Any], *names: str) -> float | None:
+    """Return the first numeric value found in metadata metrics or tags."""
+    return _first_float(metadata.get("metrics") or {}, metadata.get("tags") or {}, *names)

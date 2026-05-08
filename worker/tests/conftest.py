@@ -117,6 +117,25 @@ def _install_ml_stubs() -> None:
         ml_eda.get_numeric_categorical_columns = _get_num_cat
         sys.modules["ml.eda"] = ml_eda
 
+    # ml.train — retrain delegates the full candidate-registration pipeline here
+    if "ml.train" not in sys.modules:
+        ml_train = types.ModuleType("ml.train")
+
+        def _run_training_pipeline(**kwargs):
+            _run_training_pipeline.calls.append(kwargs)
+            return {
+                "best_model": "logistic_regression",
+                "final_run_id": "test-run-id",
+                "registered_version": "42",
+                "artifact_dir": "/tmp/driftwatch-retrain-artifacts/test/model_v1",
+                "threshold": {"threshold": 0.5, "recall": 0.76},
+                "test_metrics": {"auc": 0.8, "f1": 0.4, "recall": 0.76},
+            }
+
+        _run_training_pipeline.calls = []
+        ml_train.run_training_pipeline = _run_training_pipeline
+        sys.modules["ml.train"] = ml_train
+
 
 # install ml.* stubs at conftest-load time — must precede any `from tools.* import ...`
 _install_ml_stubs()

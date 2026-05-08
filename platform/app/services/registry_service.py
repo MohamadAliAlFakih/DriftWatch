@@ -10,6 +10,8 @@ File summary:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -18,6 +20,9 @@ from mlflow.entities.model_registry import ModelVersion
 from mlflow.tracking import MlflowClient
 
 from app.config import Settings
+
+DEFAULT_MODEL_ALIAS = "Default"
+REQUIRED_RUN_ARTIFACTS = ("schema.json", "threshold.json", "card.md")
 
 
 @dataclass(frozen=True)
@@ -101,6 +106,19 @@ class RegistryService:
             f"models:/{name}/{fallback.version}",
         )
 
+    def get_default_candidate_model(self) -> RegistryModel | None:
+        """Return the newest registered candidate tracked by the Default alias."""
+        name = self.settings.mlflow_registered_model_name
+        try:
+            version = self.client.get_model_version_by_alias(name, DEFAULT_MODEL_ALIAS)
+            return self._to_registry_model(
+                version,
+                DEFAULT_MODEL_ALIAS,
+                f"models:/{name}@{DEFAULT_MODEL_ALIAS}",
+            )
+        except Exception:
+            return self.get_fallback_model()
+
     def verify_model_version_exists(self, model_name: str, model_version: str) -> ModelVersion:
         """Raise if the requested registered model version does not exist."""
         return self.client.get_model_version(model_name, model_version)
@@ -123,6 +141,7 @@ class RegistryService:
         does not log a new MLflow run.
         """
         alias = self.settings.mlflow_model_alias
+        previous = self.get_current_production_model()
         try:
             self.client.set_registered_model_alias(model_name, alias, model_version)
         except Exception:
@@ -132,6 +151,47 @@ class RegistryService:
                 stage=alias,
                 archive_existing_versions=True,
             )
+        now = datetime.now(UTC).isoformat()
+        self._set_version_tags(
+            model_name,
+            model_version,
+            {
+                "lifecycle_status": "production",
+                "promoted_at": now,
+                "previous_production_version": previous.model_version if previous else "",
+            },
+        )
+        if previous is not None and previous.model_version != str(model_version):
+            self._set_version_tags(
+                model_name,
+                previous.model_version,
+                {
+                    "lifecycle_status": "archived",
+                    "archived_at": now,
+                    "archived_reason": f"replaced_by_v{model_version}",
+                },
+            )
+
+    def set_default_candidate(self, model_name: str, model_version: str) -> None:
+        """Point the Default alias at the newest candidate version."""
+        self.client.set_registered_model_alias(model_name, DEFAULT_MODEL_ALIAS, model_version)
+        self._set_version_tags(
+            model_name,
+            model_version,
+            {"lifecycle_status": "candidate"},
+        )
+
+    def validate_required_artifacts(self, model_name: str, model_version: str) -> None:
+        """Raise if the registered version is missing the required artifact triple."""
+        version = self.verify_model_version_exists(model_name, model_version)
+        if not version.source:
+            raise LookupError("registered model version has no model artifact source")
+        if not version.run_id:
+            raise LookupError("registered model version has no source run id")
+        available = {artifact.path for artifact in self.client.list_artifacts(version.run_id)}
+        missing = [name for name in REQUIRED_RUN_ARTIFACTS if name not in available]
+        if missing:
+            raise LookupError({"missing_artifacts": missing})
 
     def get_model_artifacts_metadata(
         self, model_name: str, model_version: str
@@ -143,13 +203,21 @@ class RegistryService:
             "source": version.source,
             "run_id": version.run_id,
             "metrics": {},
-            "tags": {},
+            "tags": dict(getattr(version, "tags", {}) or {}),
         }
         if version.run_id:
             run = self.client.get_run(version.run_id)
             metadata["metrics"] = dict(run.data.metrics)
-            metadata["tags"] = dict(run.data.tags)
+            metadata["tags"] = {**dict(run.data.tags), **metadata["tags"]}
         return metadata
+
+    def download_model_support_artifacts(self, model: RegistryModel) -> tuple[Path, Path]:
+        """Download threshold and schema artifacts from the model version's MLflow run."""
+        if model.run_id is None:
+            raise LookupError("registered model has no run id for support artifacts")
+        threshold_path = Path(self.client.download_artifacts(model.run_id, "threshold.json"))
+        schema_path = Path(self.client.download_artifacts(model.run_id, "schema.json"))
+        return threshold_path, schema_path
 
     def load_production_model(self) -> Any:
         """Load the model behind Production using MLflow's stable URI."""
@@ -167,12 +235,12 @@ class RegistryService:
     ) -> RegistryModel:
         """Convert an MLflow `ModelVersion` object into the platform dataclass."""
         metrics: dict[str, float] = {}
-        tags: dict[str, str] = {}
+        tags: dict[str, str] = dict(getattr(version, "tags", {}) or {})
         if version.run_id:
             try:
                 run = self.client.get_run(version.run_id)
                 metrics = dict(run.data.metrics)
-                tags = dict(run.data.tags)
+                tags = {**dict(run.data.tags), **tags}
             except Exception:
                 pass
         return RegistryModel(
@@ -185,6 +253,16 @@ class RegistryService:
             metrics=metrics,
             tags=tags,
         )
+
+    def _set_version_tags(
+        self, model_name: str, model_version: str, tags: dict[str, str]
+    ) -> None:
+        """Best-effort model-version tag update for lifecycle/audit state."""
+        for key, value in tags.items():
+            try:
+                self.client.set_model_version_tag(model_name, model_version, key, value)
+            except Exception:
+                continue
 
     def _fallback_sort_key(self, version: ModelVersion) -> tuple[int, int, int]:
         """Return the ordered key used by `get_fallback_model`."""
