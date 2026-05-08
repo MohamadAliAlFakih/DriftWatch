@@ -258,23 +258,46 @@ def render_hil_inbox(settings: Settings, reviewer_name: str) -> None:
     # one expander per pending investigation
     for inv in pending:
         investigation_id = inv.get("investigation_id", "")
-        # short id for display — full id is used for keys + API calls
         short_id = _truncate(investigation_id, _ID_TRUNC)
         drift_summary = inv.get("drift_event_summary") or "(no drift summary)"
-        recommended = inv.get("recommended_action") or "—"
 
-        # expander header = drift summary + recommended action; include short id for selection
-        header = f"{short_id} — {drift_summary} — recommended: {recommended}"
-        with st.expander(header):
-            # fetch full state to show drift event details inside the expander.
-            # Per-row fetch only fires when the expander is rendered; the cost is
-            # bounded by len(pending) which is small in practice.
-            try:
-                state = api.get_investigation_detail(settings, investigation_id)
+        # The /investigations summary doesn't carry the action; fetch full state up
+        # front so the header + button labels can show the real verb.
+        state: dict[str, Any] | None = None
+        try:
+            state = api.get_investigation_detail(settings, investigation_id)
+        except Exception as exc:
+            st.warning(f"Could not load detail for {short_id}: {exc}")
+
+        # During an HIL pause, the action node has interrupted BEFORE writing its
+        # ActionPlan to top-level recommended_action. Fall back to triage_output's
+        # recommended_action so the verb still shows.
+        rec = (state or {}).get("recommended_action") or {}
+        triage = (state or {}).get("triage_output") or {}
+        action = (
+            rec.get("action")
+            or triage.get("recommended_action")
+            or inv.get("recommended_action")
+            or "unknown"
+        )
+        recommended = action.upper()
+        target_version = rec.get("target_version")
+        target_text = f" → v{target_version}" if target_version else ""
+
+        # Header reads like an English sentence so the reviewer sees what they're
+        # approving without expanding (e.g. "RETRAIN → v2 — driftwatch-... yellow -> red").
+        header = f"{recommended}{target_text} — {drift_summary}"
+        with st.expander(header, expanded=True):
+            st.markdown(
+                f"**You are approving a `{recommended}` action.**  \n"
+                f"Target version: `v{target_version or '?'}`  \n"
+                f"Drift trigger: {drift_summary}  \n"
+                f"Investigation `{short_id}`"
+            )
+            st.divider()
+
+            if state is not None:
                 _render_drift_event_block(state)
-            except Exception as exc:
-                # detail fetch failure is not fatal — still render approve/reject controls
-                st.warning(f"Could not load detail: {exc}")
 
             # optional reviewer note — keyed by investigation_id so each row has its own input
             note = st.text_input(
@@ -282,11 +305,12 @@ def render_hil_inbox(settings: Settings, reviewer_name: str) -> None:
                 key=f"note_{investigation_id}",
             )
 
-            # approve + reject buttons side by side
+            # approve + reject buttons side by side; labels include the action so
+            # the reviewer is reminded what the click triggers (e.g. "Approve RETRAIN")
             col_approve, col_reject = st.columns(2)
             with col_approve:
                 if st.button(
-                    "Approve",
+                    f"Approve {recommended}",
                     key=f"approve_{investigation_id}",
                     type="primary",
                 ):
@@ -305,7 +329,7 @@ def render_hil_inbox(settings: Settings, reviewer_name: str) -> None:
                         st.warning(f"Approve failed: {exc}")
             with col_reject:
                 if st.button(
-                    "Reject",
+                    f"Reject {recommended}",
                     key=f"reject_{investigation_id}",
                 ):
                     # same pattern as approve, different endpoint

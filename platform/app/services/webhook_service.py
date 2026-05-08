@@ -39,6 +39,45 @@ class WebhookService:
         self.settings = settings
         self.client = client
 
+    def send_drift_alert_sync(self, alert: DriftAlert) -> None:
+        """Sync variant for callers running in a sync request thread (drift route).
+
+        Avoids the asyncio.run() trap where a fresh event loop was being created
+        per check_drift() call but the lifespan-owned httpx.AsyncClient was bound
+        to FastAPI's main loop, leading to "Event loop is closed" errors after
+        the second check.
+        """
+        body_bytes = json.dumps(alert.webhook_payload, separators=(",", ":")).encode("utf-8")
+        signature = _sign_payload(
+            body_bytes,
+            self.settings.webhook_hmac_secret.get_secret_value(),
+        )
+        try:
+            with httpx.Client(timeout=self.settings.webhook_timeout_seconds) as client:
+                response = client.post(
+                    self.settings.agent_webhook_url,
+                    content=body_bytes,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-DriftWatch-Signature": signature,
+                    },
+                )
+            alert.response_status = response.status_code
+            alert.sent_at = datetime.now(UTC)
+            alert.status = "sent" if response.is_success else "failed"
+            if not response.is_success:
+                alert.error_message = response.text[:1000]
+            log.info(
+                "drift_webhook_sent",
+                event_id=alert.event_id,
+                status=alert.status,
+                response_status=alert.response_status,
+            )
+        except Exception as exc:
+            alert.status = "failed"
+            alert.error_message = str(exc)[:1000]
+            log.warning("drift_webhook_failed", event_id=alert.event_id, error=str(exc))
+
     async def send_drift_alert(self, alert: DriftAlert) -> None:
         """Post one drift alert to the agent and update delivery fields on the alert."""
         # serialize payload deterministically so the agent can re-hash the same bytes
