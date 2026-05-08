@@ -4,7 +4,7 @@ File summary:
 - Loads the raw bank marketing CSV from disk.
 - Applies project-specific cleaning rules before training or drift reference creation.
 - Splits cleaned data into features and target.
-- Creates the stratified train/test split used by the training pipeline.
+- Creates the required stratified 60/20/20 train/validation/test split.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 TARGET_COL = "y"
 DURATION_COL = "duration"
 PDAYS_COL = "pdays"
-PDAYS_SENTINEL = -1
+PDAYS_SENTINEL = 999
 
 
 def load_bank_marketing_data(path: str | Path) -> pd.DataFrame:
@@ -53,11 +53,10 @@ def clean_bank_marketing_data(df: pd.DataFrame) -> pd.DataFrame:
         pdays_numeric = pd.to_numeric(cleaned[PDAYS_COL], errors="coerce")
         sentinel_mask = pdays_numeric == PDAYS_SENTINEL
 
-        # The current bank-full.csv uses -1 for "not previously contacted".
-        # We keep this as an explicit flag so the numeric pdays value can be
-        # cleaned without losing the sentinel meaning.
-        cleaned["pdays_was_minus_one"] = sentinel_mask.astype(int)
-        cleaned["never_contacted_flag"] = cleaned["pdays_was_minus_one"]
+        # UCI bank-additional-full.csv uses 999 for "not previously contacted".
+        # Keep that fact as explicit model signal while making pdays_clean numeric.
+        cleaned["pdays_was_999"] = sentinel_mask.astype(int)
+        cleaned["never_contacted_flag"] = cleaned["pdays_was_999"]
 
         # Keep a numeric pdays value for modeling, with the sentinel replaced by
         # zero because the flag now carries the "never contacted" meaning.
@@ -83,13 +82,51 @@ def split_features_target(
     return df.drop(columns=[target_col]), df[target_col].astype(int)
 
 
+def make_train_validation_test_split(
+    x: pd.DataFrame,
+    y: pd.Series,
+    train_size: float = 0.60,
+    validation_size: float = 0.20,
+    test_size: float = 0.20,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, pd.Series]:
+    """Create the required stratified 60/20/20 train/validation/test split."""
+    total = train_size + validation_size + test_size
+    if round(total, 10) != 1.0:
+        raise ValueError(
+            {
+                "error": "invalid_split_sizes",
+                "train_size": train_size,
+                "validation_size": validation_size,
+                "test_size": test_size,
+            }
+        )
+
+    x_train, x_temp, y_train, y_temp = train_test_split(
+        x,
+        y,
+        train_size=train_size,
+        stratify=y,
+        random_state=random_state,
+    )
+    relative_test_size = test_size / (validation_size + test_size)
+    x_val, x_test, y_val, y_test = train_test_split(
+        x_temp,
+        y_temp,
+        test_size=relative_test_size,
+        stratify=y_temp,
+        random_state=random_state,
+    )
+    return x_train, x_val, x_test, y_train, y_val, y_test
+
+
 def make_train_test_split(
     x: pd.DataFrame,
     y: pd.Series,
-    test_size: float = 0.30,
+    test_size: float = 0.20,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Create the required stratified 70/30 train/test split."""
+    """Create a stratified train/test split for legacy callers."""
     return train_test_split(
         x,
         y,

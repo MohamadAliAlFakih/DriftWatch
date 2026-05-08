@@ -1,43 +1,36 @@
 # DriftWatch Bank Marketing Model
 
 ## Dataset
-- Name: bank-full.csv
-- MD5 hash: `e6b0ca77f3f200ec5428e04dd104da53`
-- Shape: 45211 rows, 17 columns
+- Name: bank-additional-full.csv
+- MD5 hash: `f6cb2c1256ffe2836b36df321f46e92c`
+- Shape: 41188 rows, 21 columns
 - Target: `y`, where `yes` maps to 1 and `no` maps to 0
 
 ## Training Setup
-- Split strategy: stratified 70/30 train/test, random_state=42
+- Split strategy: stratified 60/20/20 train/validation/test, random_state=42
 - Cross-validation: stratified folds on the training split
 - Leakage warning: `duration` is dropped because it is known only after a call ends
-- `pdays` sentinel: `pdays == -1` becomes `pdays_was_minus_one`, `never_contacted_flag`,
+- `pdays` sentinel: `pdays == 999` becomes `pdays_was_999`, `never_contacted_flag`,
   and `pdays_clean`
 - `unknown` treatment: preserved as a real categorical value
 
 ## Model
-- Class: HistGradientBoostingClassifier
+- Class: LogisticRegression
 - Hyperparameters:
 ```json
 {
-  "categorical_features": "from_dtype",
-  "class_weight": null,
-  "early_stopping": "auto",
-  "interaction_cst": null,
-  "l2_regularization": 0.0,
-  "learning_rate": 0.06,
-  "loss": "log_loss",
-  "max_bins": 255,
-  "max_depth": null,
-  "max_features": 1.0,
-  "max_iter": 200,
-  "max_leaf_nodes": 31,
-  "min_samples_leaf": 20,
-  "monotonic_cst": null,
-  "n_iter_no_change": 10,
+  "C": 0.1,
+  "class_weight": "balanced",
+  "dual": false,
+  "fit_intercept": true,
+  "intercept_scaling": 1,
+  "l1_ratio": 0.0,
+  "max_iter": 1000,
+  "n_jobs": null,
+  "penalty": "deprecated",
   "random_state": 42,
-  "scoring": "loss",
-  "tol": 1e-07,
-  "validation_fraction": 0.1,
+  "solver": "lbfgs",
+  "tol": 0.0001,
   "verbose": 0,
   "warm_start": false
 }
@@ -46,38 +39,38 @@
 ## Final Test Metrics
 ```json
 {
-  "accuracy": 0.6879239162488942,
-  "auc": 0.7990966091856692,
+  "accuracy": 0.7194707453265355,
+  "auc": 0.8007907212604368,
   "confusion_matrix": [
     [
-      8134,
-      3843
+      5238,
+      2072
     ],
     [
-      390,
-      1197
+      239,
+      689
     ]
   ],
-  "f1": 0.3612494341330919,
-  "precision": 0.2375,
-  "recall": 0.7542533081285444
+  "f1": 0.3735429655733261,
+  "precision": 0.24954726548352046,
+  "recall": 0.7424568965517241
 }
 ```
 
 ## Operating Threshold
 ```json
 {
-  "f1": 0.36754682019720736,
-  "precision": 0.2434043299149794,
-  "recall": 0.7501350621285792,
-  "threshold": 0.08334068156924374
+  "f1": 0.3757085020242915,
+  "precision": 0.25063017644940583,
+  "recall": 0.75,
+  "threshold": 0.3897478990873066
 }
 ```
 
 ## Environment Fingerprint
 ```json
 {
-  "created_at": "2026-05-07T02:05:10.442411+00:00",
+  "created_at": "2026-05-08T02:30:42.546679+00:00",
   "packages": {
     "joblib": "1.5.3",
     "mlflow": "2.16.2",
@@ -91,7 +84,7 @@
 ```
 
 ## Artifact Integrity
-- SHA-256: `aa7801586b69c1360db2aa6181ca4aa223a30d718c865015f1e572fd23d73830`
+- SHA-256: `1ccc708f102c2efe23d445e21f4eb101cee610468e598901002ccff956047546`
 
 ## Intended Use
 - Score bank marketing leads for subscription propensity and support drift monitoring.

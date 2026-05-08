@@ -30,7 +30,7 @@ def promote(
         return service.promote(db, payload, x_platform_token)
     except PromotionRejected as exc:
         raise HTTPException(
-            status_code=403,
+            status_code=exc.status_code,
             detail={
                 "error": {
                     "code": "PROMOTION_REJECTED",

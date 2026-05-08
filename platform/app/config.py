@@ -10,7 +10,7 @@ File summary:
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     platform_database_url: str
 
-    data_path: str = "platform/data/bank-full.csv"
+    data_path: str = "platform/data/bank-additional-full.csv"
     mlflow_tracking_uri: str
     mlflow_experiment_name: str = "DriftWatch Bank Marketing"
     mlflow_registered_model_name: str = "driftwatch-bank-marketing"
@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     default_threshold_path: str = "platform/artifacts/model_v1/threshold.json"
     default_schema_path: str = "platform/artifacts/model_v1/schema.json"
     random_state: int = 42
-    test_size: float = 0.30
+    split_train_size: float = 0.60
+    split_validation_size: float = 0.20
+    split_test_size: float = 0.20
     min_recall: float = 0.75
     model_version_label: str = "v1"
 
@@ -57,6 +59,14 @@ class Settings(BaseSettings):
     output_drift_psi_threshold: float = 0.20
     promotion_bearer_token: SecretStr
 
+    @field_validator("data_path")
+    @classmethod
+    def normalize_removed_bank_full_path(cls, value: str) -> str:
+        """Keep old local env files working after replacing the dataset."""
+        if value.endswith("bank-full.csv"):
+            return value.removesuffix("bank-full.csv") + "bank-additional-full.csv"
+        return value
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -69,15 +79,25 @@ class MLSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
 
-    data_path: str = "platform/data/bank-full.csv"
+    data_path: str = "platform/data/bank-additional-full.csv"
     mlflow_tracking_uri: str = "http://localhost:5001"
     mlflow_experiment_name: str = "DriftWatch Bank Marketing"
     mlflow_registered_model_name: str = "driftwatch-bank-marketing"
     artifact_dir: str = "platform/artifacts"
     random_state: int = 42
-    test_size: float = 0.30
+    split_train_size: float = 0.60
+    split_validation_size: float = 0.20
+    split_test_size: float = 0.20
     min_recall: float = 0.75
     model_version_label: str = "v1"
+
+    @field_validator("data_path")
+    @classmethod
+    def normalize_removed_bank_full_path(cls, value: str) -> str:
+        """Keep old local env files working after replacing the dataset."""
+        if value.endswith("bank-full.csv"):
+            return value.removesuffix("bank-full.csv") + "bank-additional-full.csv"
+        return value
 
 
 @lru_cache(maxsize=1)

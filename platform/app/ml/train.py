@@ -38,7 +38,7 @@ from app.ml.artifacts import (
 from app.ml.data import (
     clean_bank_marketing_data,
     load_bank_marketing_data,
-    make_train_test_split,
+    make_train_validation_test_split,
     split_features_target,
 )
 from app.ml.eda import get_numeric_categorical_columns
@@ -89,7 +89,7 @@ def build_candidate_pipelines(
                         n_estimators=200,
                         min_samples_leaf=5,
                         class_weight="balanced",
-                        n_jobs=-1,
+                        n_jobs=1,
                         random_state=random_state,
                     ),
                 ),
@@ -131,7 +131,7 @@ def train_baseline_models(
             y_train,
             cv=cv,
             method="predict_proba",
-            n_jobs=-1,
+            n_jobs=1,
         )[:, 1]
         pipeline.fit(x_train, y_train)
         results.append(
@@ -147,7 +147,7 @@ def train_baseline_models(
 
 
 def select_best_model(candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    """Choose best CV AUC among models that satisfy the recall threshold rule."""
+    """Choose the recall-valid model with the highest usable threshold."""
     eligible = [candidate for candidate in candidates if "threshold" in candidate]
     if not eligible:
         raise ValueError(
@@ -162,9 +162,19 @@ def select_best_model(candidates: list[dict[str, Any]]) -> dict[str, Any]:
         "hist_gradient_boosting": 1,
         "random_forest": 2,
     }
+    # Tie rules are intentional and audit-friendly:
+    # 1) prefer the highest threshold that still keeps recall >= min_recall,
+    # 2) then prefer stronger ranking quality by CV AUC,
+    # 3) then prefer validation F1,
+    # 4) finally prefer the simpler model family for easier Friday defense.
     return sorted(
         eligible,
-        key=lambda item: (float(item["cv_auc"]), -complexity_rank.get(str(item["name"]), 99)),
+        key=lambda item: (
+            float(item["threshold"]["threshold"]),
+            float(item["cv_auc"]),
+            float(item.get("validation_metrics", {}).get("f1", 0.0)),
+            -complexity_rank.get(str(item["name"]), 99),
+        ),
         reverse=True,
     )[0]
 
@@ -177,7 +187,9 @@ def run_training_pipeline(
     mlflow_experiment_name: str,
     registered_model_name: str,
     random_state: int = 42,
-    test_size: float = 0.30,
+    train_size: float = 0.60,
+    validation_size: float = 0.20,
+    test_size: float = 0.20,
     min_recall: float = 0.75,
     model_version_label: str = "v1",
 ) -> dict[str, Any]:
@@ -187,9 +199,11 @@ def run_training_pipeline(
     raw_df = load_bank_marketing_data(data_path)
     cleaned_df = clean_bank_marketing_data(raw_df)
     x, y = split_features_target(cleaned_df)
-    x_train, x_test, y_train, y_test = make_train_test_split(
+    x_train, x_val, x_test, y_train, y_val, y_test = make_train_validation_test_split(
         x,
         y,
+        train_size=train_size,
+        validation_size=validation_size,
         test_size=test_size,
         random_state=random_state,
     )
@@ -211,13 +225,16 @@ def run_training_pipeline(
         random_state=random_state,
     )
     baseline_results = train_baseline_models(pipelines, x_train, y_train, random_state=random_state)
+    _attach_validation_probabilities(baseline_results, x_val)
     baseline_run_ids = _attach_thresholds_and_log(
         baseline_results,
-        y_train,
+        y_val,
         run_group="baseline",
         dataset_info=dataset_info,
         environment=environment,
         random_state=random_state,
+        train_size=train_size,
+        validation_size=validation_size,
         test_size=test_size,
         min_recall=min_recall,
     )
@@ -230,18 +247,21 @@ def run_training_pipeline(
         y_train,
         random_state=random_state,
     )
+    _attach_validation_probabilities([tuned_result], x_val)
     tuned_run_ids = _attach_thresholds_and_log(
         [tuned_result],
-        y_train,
+        y_val,
         run_group="tuned",
         dataset_info=dataset_info,
         environment=environment,
         random_state=random_state,
+        train_size=train_size,
+        validation_size=validation_size,
         test_size=test_size,
         min_recall=min_recall,
     )
 
-    best = select_best_model([tuned_result])
+    best = select_best_model([*baseline_results, tuned_result])
     test_proba = best["pipeline"].predict_proba(x_test)[:, 1]
     test_metrics = evaluate_classifier(y_test, test_proba, best["threshold"]["threshold"])
 
@@ -256,6 +276,13 @@ def run_training_pipeline(
         "run_created_at": datetime.now(UTC).isoformat(),
         "dataset": dataset_info,
         "selected_model": best["name"],
+        "split": {
+            "train_size": train_size,
+            "validation_size": validation_size,
+            "test_size": test_size,
+            "stratified": True,
+            "random_state": random_state,
+        },
         "mlflow_experiment_name": mlflow_experiment_name,
         "registered_model_name": registered_model_name,
         "model_artifact_path": str(model_path),
@@ -265,6 +292,7 @@ def run_training_pipeline(
     }
     metrics_payload = {
         "cv_auc": best["cv_auc"],
+        "validation": best["validation_metrics"],
         "test": test_metrics,
     }
 
@@ -293,6 +321,8 @@ def run_training_pipeline(
         dataset_info=dataset_info,
         environment=environment,
         random_state=random_state,
+        train_size=train_size,
+        validation_size=validation_size,
         test_size=test_size,
         min_recall=min_recall,
         registered_model_name=registered_model_name,
@@ -303,30 +333,53 @@ def run_training_pipeline(
         "registered_version": registered_version,
         "artifact_dir": str(artifact_dir),
         "threshold": best["threshold"],
+        "validation_metrics": best["validation_metrics"],
         "test_metrics": test_metrics,
     }
 
 
+def _attach_validation_probabilities(
+    results: list[dict[str, Any]],
+    x_validation: pd.DataFrame,
+) -> None:
+    """Attach validation probabilities used for threshold selection."""
+    for result in results:
+        result["validation_proba"] = result["pipeline"].predict_proba(x_validation)[:, 1]
+
+
 def _attach_thresholds_and_log(
     results: list[dict[str, Any]],
-    y_train: pd.Series,
+    y_validation: pd.Series,
     *,
     run_group: str,
     dataset_info: dict[str, Any],
     environment: dict[str, Any],
     random_state: int,
+    train_size: float,
+    validation_size: float,
     test_size: float,
     min_recall: float,
 ) -> list[str]:
-    """Attach threshold metadata to candidate results and log each run to MLflow."""
+    """Attach validation threshold metadata and log each run to MLflow."""
     run_ids: list[str] = []
     for result in results:
         result["threshold"] = find_highest_threshold_meeting_recall(
-            y_train,
-            result["cv_proba"],
+            y_validation,
+            result["validation_proba"],
             min_recall=min_recall,
         )
-        metrics = _cv_metrics(y_train, result["cv_proba"], result["threshold"]["threshold"])
+        metrics = _validation_metrics(
+            y_validation,
+            result["validation_proba"],
+            result["threshold"]["threshold"],
+            cv_auc=float(result["cv_auc"]),
+        )
+        result["validation_metrics"] = {
+            "auc": metrics["validation_auc"],
+            "f1": metrics["validation_f1"],
+            "precision": metrics["validation_precision"],
+            "recall": metrics["validation_recall"],
+        }
         metrics["operating_threshold"] = float(result["threshold"]["threshold"])
         run_id = log_experiment_run(
             run_name=f"{run_group}_{result['name']}",
@@ -335,6 +388,8 @@ def _attach_thresholds_and_log(
                 dataset_info=dataset_info,
                 environment=environment,
                 random_state=random_state,
+                train_size=train_size,
+                validation_size=validation_size,
                 test_size=test_size,
                 min_recall=min_recall,
             ),
@@ -354,6 +409,8 @@ def _log_final_registered_run(
     dataset_info: dict[str, Any],
     environment: dict[str, Any],
     random_state: int,
+    train_size: float,
+    validation_size: float,
     test_size: float,
     min_recall: float,
     registered_model_name: str,
@@ -367,6 +424,8 @@ def _log_final_registered_run(
                 dataset_info=dataset_info,
                 environment=environment,
                 random_state=random_state,
+                train_size=train_size,
+                validation_size=validation_size,
                 test_size=test_size,
                 min_recall=min_recall,
             )
@@ -401,6 +460,8 @@ def _run_params(
     dataset_info: dict[str, Any],
     environment: dict[str, Any],
     random_state: int,
+    train_size: float,
+    validation_size: float,
     test_size: float,
     min_recall: float,
 ) -> dict[str, Any]:
@@ -411,6 +472,8 @@ def _run_params(
         "hyperparameters": json.dumps(model.get_params(), sort_keys=True, default=str),
         "random_state": random_state,
         "stratified": True,
+        "train_size": train_size,
+        "validation_size": validation_size,
         "test_size": test_size,
         "preprocessing": json.dumps(
             {
@@ -418,7 +481,7 @@ def _run_params(
                 "categorical_encoding": "one_hot_handle_unknown_ignore",
                 "scaling": result["name"] == "logistic_regression",
                 "dropped_columns": ["duration"],
-                "pdays_sentinel_handling": "-1_to_flags_and_pdays_clean",
+                "pdays_sentinel_handling": "999_to_flags_and_pdays_clean",
             },
             sort_keys=True,
         ),
@@ -430,16 +493,21 @@ def _run_params(
     }
 
 
-def _cv_metrics(y_true: pd.Series, y_proba: np.ndarray, threshold: float) -> dict[str, float]:
-    """Compute cross-validation metrics at a chosen operating threshold."""
+def _validation_metrics(
+    y_true: pd.Series,
+    y_proba: np.ndarray,
+    threshold: float,
+    *,
+    cv_auc: float,
+) -> dict[str, float]:
+    """Compute validation metrics at the chosen operating threshold."""
     y_pred = (y_proba >= threshold).astype(int)
     return {
-        "train_auc": float(roc_auc_score(y_true, y_proba)),
-        "cv_auc": float(roc_auc_score(y_true, y_proba)),
-        "cv_f1": float(f1_score(y_true, y_pred, zero_division=0)),
-        "val_f1": float(f1_score(y_true, y_pred, zero_division=0)),
-        "val_precision": float(precision_score(y_true, y_pred, zero_division=0)),
-        "val_recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "cv_auc": cv_auc,
+        "validation_auc": float(roc_auc_score(y_true, y_proba)),
+        "validation_f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "validation_precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "validation_recall": float(recall_score(y_true, y_pred, zero_division=0)),
     }
 
 
@@ -488,7 +556,9 @@ def main() -> None:
         mlflow_experiment_name=settings.mlflow_experiment_name,
         registered_model_name=settings.mlflow_registered_model_name,
         random_state=settings.random_state,
-        test_size=settings.test_size,
+        train_size=settings.split_train_size,
+        validation_size=settings.split_validation_size,
+        test_size=settings.split_test_size,
         min_recall=settings.min_recall,
         model_version_label=settings.model_version_label,
     )

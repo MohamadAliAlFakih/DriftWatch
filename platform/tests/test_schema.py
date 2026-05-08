@@ -18,8 +18,8 @@ def test_schema_excludes_target_and_duration_and_captures_categories() -> None:
             "age": [30, 40],
             "job": ["unknown", "admin."],
             "duration": [100, 200],
-            "pdays": [-1, 4],
-            "pdays_was_minus_one": [1, 0],
+            "pdays": [999, 4],
+            "pdays_was_999": [1, 0],
             "y": [1, 0],
         }
     )
@@ -28,7 +28,7 @@ def test_schema_excludes_target_and_duration_and_captures_categories() -> None:
 
     assert "y" not in schema["required_fields"]
     assert "duration" not in schema["required_fields"]
-    assert {"age", "job", "pdays", "pdays_was_minus_one"}.issubset(
+    assert {"age", "job", "pdays", "pdays_was_999"}.issubset(
         schema["required_fields"]
     )
     assert schema["threshold_location"] == "threshold.json"
