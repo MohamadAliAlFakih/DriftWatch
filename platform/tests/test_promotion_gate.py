@@ -35,7 +35,19 @@ class DummyRegistry:
 
     def get_model_artifacts_metadata(self, model_name, model_version):
         """Return minimal metrics and tags for promotion audit fields."""
-        return {"metrics": {"test_auc": 0.8, "test_f1": 0.4}, "tags": {}}
+        return {
+            "metrics": {
+                "test_auc": 0.8,
+                "test_f1": 0.4,
+                "test_recall": 0.76,
+                "operating_threshold": 0.5,
+            },
+            "tags": {},
+        }
+
+    def validate_required_artifacts(self, model_name, model_version):
+        """Pretend the required MLflow artifact triple exists."""
+        return None
 
     def promote_model_version(self, model_name, model_version):
         """Record which model version the service attempted to promote."""

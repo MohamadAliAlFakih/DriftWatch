@@ -7,6 +7,7 @@ File summary:
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from sqlalchemy import create_engine
@@ -17,7 +18,7 @@ from app.db.base import Base
 from app.db.models import Prediction
 from app.models.prediction import PredictionResponse
 from app.services import prediction_service
-from app.services.prediction_service import LoadedModel, PredictionService
+from app.services.prediction_service import LoadedModel, PredictionService, _load_threshold
 
 
 class DummyModel:
@@ -66,3 +67,12 @@ def test_prediction_logs_to_database(monkeypatch) -> None:
     assert isinstance(result, PredictionResponse)
     assert result.prediction == 1
     assert db.query(Prediction).count() == 1
+
+
+def test_threshold_fallback_path_resolves_from_platform_cwd(monkeypatch) -> None:
+    """Verify docker-style artifact paths still work from the platform directory."""
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+
+    threshold = _load_threshold("platform/artifacts/model_v1/threshold.json")
+
+    assert 0.0 < threshold < 1.0

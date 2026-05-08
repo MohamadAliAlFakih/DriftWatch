@@ -70,13 +70,13 @@ def test_severity_change_triggers_one_alert(monkeypatch) -> None:
     """Verify one alert is sent when drift severity changes into alertable levels."""
     sent = []
 
-    async def fake_send(self, alert):
+    def fake_send(self, alert):
         """Pretend webhook delivery succeeded without making a network call."""
         sent.append(alert.event_id)
         alert.status = "sent"
         alert.response_status = 200
 
-    monkeypatch.setattr(WebhookService, "send_drift_alert", fake_send)
+    monkeypatch.setattr(WebhookService, "send_drift_alert_sync", fake_send)
     db = _db()
     db.add(
         ReferenceStatistics(
@@ -123,3 +123,54 @@ def test_severity_change_triggers_one_alert(monkeypatch) -> None:
     assert first.alert is not None
     assert second.alert is None
     assert len(sent) == 1
+
+
+def test_reset_demo_state_clears_prediction_and_drift_rows() -> None:
+    """Verify demo reset clears rolling-window state without touching references."""
+    db = _db()
+    reference = ReferenceStatistics(
+        model_name="driftwatch-bank-marketing",
+        numeric_stats={},
+        categorical_stats={},
+        output_stats={},
+        is_active=True,
+    )
+    db.add(reference)
+    prediction = Prediction(
+        model_name="m",
+        input_json={"age": 1},
+        prediction=0,
+        probability=0.1,
+        threshold=0.5,
+    )
+    report = DriftReport(
+        model_name="driftwatch-bank-marketing",
+        window_size=1,
+        numeric_psi={},
+        categorical_chi2={},
+        output_drift={},
+        severity="high",
+    )
+    db.add(prediction)
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    db.add(
+        DriftAlert(
+            drift_report_id=report.id,
+            event_id="drift_test",
+            severity="high",
+            webhook_payload={},
+        )
+    )
+    db.commit()
+
+    result = DriftService(_settings()).reset_demo_state(db)
+
+    assert result.deleted_predictions == 1
+    assert result.deleted_drift_reports == 1
+    assert result.deleted_drift_alerts == 1
+    assert db.query(Prediction).count() == 0
+    assert db.query(DriftReport).count() == 0
+    assert db.query(DriftAlert).count() == 0
+    assert db.query(ReferenceStatistics).count() == 1

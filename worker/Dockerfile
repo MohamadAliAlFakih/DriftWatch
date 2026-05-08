@@ -29,4 +29,4 @@ COPY worker /app/worker
 ENV PYTHONPATH=/app/worker:/app
 
 # arq entrypoint reads main.WorkerSettings from /app/worker (on PYTHONPATH)
-CMD ["uv", "run", "arq", "main.WorkerSettings"]
+CMD ["uv", "run", "--no-sync", "arq", "main.WorkerSettings"]

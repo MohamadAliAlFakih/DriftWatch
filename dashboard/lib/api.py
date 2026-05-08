@@ -1,9 +1,8 @@
-"""Typed sync httpx wrappers for the dashboard — D-04, D-07.
+"""Typed sync requests wrappers for the dashboard — D-04, D-07.
 
 Streamlit is a synchronous framework: every rerun executes the script top-to-bottom
-on the request thread. We use httpx's sync Client (NOT AsyncClient) here because
-mixing asyncio.run inside Streamlit reruns is fragile. Sync httpx is supported,
-fast enough for a 4-tab dashboard polling every 5s, and keeps the code simple.
+on the request thread. We use requests here because Streamlit already installs it,
+which keeps the dashboard image stable with the current frozen lock file.
 
 Each function:
 - builds the URL from settings (no hard-coded hosts)
@@ -16,13 +15,14 @@ All functions tag-commented per Rule 12.
 
 from typing import Any
 
-import httpx
-
+import requests
 from config import Settings
 
 # default timeout — short enough that a dead service does not freeze the UI for long,
 # long enough to survive the agent's first-call cold start under docker compose
-_DEFAULT_TIMEOUT = 5.0
+_DEFAULT_TIMEOUT = 15.0
+_MODEL_TIMEOUT = 45.0
+_BULK_TIMEOUT = 30.0
 
 
 # fetch all investigation summaries from the agent
@@ -31,7 +31,7 @@ def get_investigations(settings: Settings) -> list[dict[str, Any]]:
     # build URL from settings; no os.getenv outside config.py per Rule 7
     url = f"{settings.agent_url}/investigations"
     # short timeout so a dead agent does not freeze the dashboard
-    response = httpx.get(url, timeout=_DEFAULT_TIMEOUT)
+    response = requests.get(url, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -41,7 +41,7 @@ def get_investigation_detail(settings: Settings, investigation_id: str) -> dict[
     """GET /investigations/{id} — full InvestigationState dict."""
     # path-encoded id; uuid string format is URL-safe so no escaping needed
     url = f"{settings.agent_url}/investigations/{investigation_id}"
-    response = httpx.get(url, timeout=_DEFAULT_TIMEOUT)
+    response = requests.get(url, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -51,7 +51,59 @@ def get_dlq(settings: Settings) -> list[dict[str, Any]]:
     """GET /queue/dlq on the agent — list of FailedJob dicts."""
     # agent's DLQ surface — proxies arq's failed-jobs registry
     url = f"{settings.agent_url}/queue/dlq"
-    response = httpx.get(url, timeout=_DEFAULT_TIMEOUT)
+    response = requests.get(url, timeout=_DEFAULT_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_prediction_schema(settings: Settings) -> dict[str, Any]:
+    """GET /api/v1/predict/schema on the platform — serving schema for dashboard forms."""
+    url = f"{settings.platform_url}/api/v1/predict/schema"
+    response = requests.get(url, timeout=_MODEL_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def predict(settings: Settings, payload: dict[str, Any]) -> dict[str, Any]:
+    """POST /api/v1/predict on the platform — score one cleaned feature payload."""
+    url = f"{settings.platform_url}/api/v1/predict"
+    response = requests.post(url, json=payload, timeout=_MODEL_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def predict_many(settings: Settings, payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """POST many prediction payloads using one sync HTTP client for demo traffic."""
+    url = f"{settings.platform_url}/api/v1/predict"
+    results: list[dict[str, Any]] = []
+    with requests.Session() as session:
+        for payload in payloads:
+            response = session.post(url, json=payload, timeout=_BULK_TIMEOUT)
+            response.raise_for_status()
+            results.append(response.json())
+    return results
+
+
+def check_drift(settings: Settings) -> dict[str, Any]:
+    """POST /api/v1/drift/check on the platform — compute the rolling drift report."""
+    url = f"{settings.platform_url}/api/v1/drift/check"
+    response = requests.post(url, timeout=_DEFAULT_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def recompute_reference(settings: Settings) -> dict[str, Any]:
+    """POST /api/v1/drift/reference/recompute — rebuild the drift reference profile."""
+    url = f"{settings.platform_url}/api/v1/drift/reference/recompute"
+    response = requests.post(url, timeout=_DEFAULT_TIMEOUT)
+    response.raise_for_status()
+    return response.json()
+
+
+def reset_demo_state(settings: Settings) -> dict[str, Any]:
+    """POST /api/v1/drift/demo/reset — clear demo prediction and drift state."""
+    url = f"{settings.platform_url}/api/v1/drift/demo/reset"
+    response = requests.post(url, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -71,7 +123,7 @@ def approve_hil(
         "approver": approver,
         "note": note,
     }
-    response = httpx.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+    response = requests.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -91,7 +143,7 @@ def reject_hil(
         "approver": approver,
         "note": note,
     }
-    response = httpx.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
+    response = requests.post(url, json=body, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -101,7 +153,7 @@ def get_registry_state(settings: Settings) -> dict[str, Any]:
     """GET /api/v1/registry/state on the platform — current Production model dict."""
     # platform's registry router lives under /api/v1/registry — full prefix matters
     url = f"{settings.platform_url}/api/v1/registry/state"
-    response = httpx.get(url, timeout=_DEFAULT_TIMEOUT)
+    response = requests.get(url, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()
 
@@ -115,6 +167,6 @@ def get_registry_history(settings: Settings) -> dict[str, Any]:
     """
     # full /api/v1/registry/history path; same prefix as state
     url = f"{settings.platform_url}/api/v1/registry/history"
-    response = httpx.get(url, timeout=_DEFAULT_TIMEOUT)
+    response = requests.get(url, timeout=_DEFAULT_TIMEOUT)
     response.raise_for_status()
     return response.json()

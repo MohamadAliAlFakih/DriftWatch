@@ -58,10 +58,11 @@ services:
         mlflow server \
           --backend-store-uri ${MLFLOW_BACKEND_URI} \
           --default-artifact-root ${MLFLOW_ARTIFACT_ROOT} \
+          --artifacts-destination ${MLFLOW_ARTIFACT_ROOT} \
           --host 0.0.0.0 \
           --port 5000
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
 
@@ -75,8 +76,15 @@ services:
       postgres:
         condition: service_healthy
     env_file: .env
+    environment:
+      MLFLOW_HTTP_REQUEST_TIMEOUT: ${MLFLOW_HTTP_REQUEST_TIMEOUT:-5}
+      MLFLOW_HTTP_REQUEST_MAX_RETRIES: ${MLFLOW_HTTP_REQUEST_MAX_RETRIES:-1}
+      MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR: ${MLFLOW_HTTP_REQUEST_BACKOFF_FACTOR:-0}
     ports:
       - "8001:8000"
+    volumes:
+      - ./platform/artifacts:/app/platform/artifacts
+      - ./platform/data:/app/platform/data:ro
 
   agent:
     build:
@@ -113,6 +121,8 @@ services:
     env_file: .env
     ports:
       - "8501:8501"
+    volumes:
+      - ./platform/data:/app/data:ro
 
 volumes:
   postgres_data:

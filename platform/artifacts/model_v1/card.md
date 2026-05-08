@@ -63,14 +63,14 @@
   "f1": 0.3757085020242915,
   "precision": 0.25063017644940583,
   "recall": 0.75,
-  "threshold": 0.3897478990873066
+  "threshold": 0.3897478990837321
 }
 ```
 
 ## Environment Fingerprint
 ```json
 {
-  "created_at": "2026-05-08T02:30:42.546679+00:00",
+  "created_at": "2026-05-08T10:40:44.828159+00:00",
   "packages": {
     "joblib": "1.5.3",
     "mlflow": "2.16.2",
@@ -78,13 +78,13 @@
     "pandas": "2.3.3",
     "sklearn": "1.8.0"
   },
-  "platform": "macOS-15.7.5-arm64-arm-64bit",
+  "platform": "Linux-6.12.76-linuxkit-aarch64-with-glibc2.41",
   "python": "3.11.15"
 }
 ```
 
 ## Artifact Integrity
-- SHA-256: `1ccc708f102c2efe23d445e21f4eb101cee610468e598901002ccff956047546`
+- SHA-256: `58d03858db51c2029a3936ff0215f0994384915d3ef6b505ca47d5b07c5bc877`
 
 ## Intended Use
 - Score bank marketing leads for subscription propensity and support drift monitoring.
