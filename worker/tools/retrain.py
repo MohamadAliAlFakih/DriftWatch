@@ -73,6 +73,13 @@ async def retrain(
             model_version_label=f"retrain-{target_version}",
         )
     except Exception as exc:
+        # Log the underlying error so DLQ root-cause is visible (was previously silenced for MlflowException).
+        log.warning(
+            "retrain_pipeline_error",
+            investigation_id=investigation_id,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
         if isinstance(exc, mlflow.exceptions.MlflowException):
             # transient registry failure — let arq retry with backoff (D-04)
             raise Retry(defer=ctx.get("retry_defer", 2)) from exc
