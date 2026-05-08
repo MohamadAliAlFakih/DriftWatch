@@ -223,6 +223,11 @@ __marimo__/
 # DriftWatch — local-only docs (planning, brief, references, instructor examples)
 docs - DO NOT COMMIT/
 
+# DriftWatch — raw datasets copied locally from UCI/source docs.
+# Keep lightweight metadata such as bank-additional-names.txt trackable.
+platform/data/*.csv
+!platform/data/.gitkeep
+
 # MLflow local artifacts (when running outside Docker)
 mlruns/
 mlartifacts/

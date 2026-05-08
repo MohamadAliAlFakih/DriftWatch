@@ -90,10 +90,10 @@ def create_model_card(
 - Target: `y`, where `yes` maps to 1 and `no` maps to 0
 
 ## Training Setup
-- Split strategy: stratified 70/30 train/test, random_state=42
+- Split strategy: stratified 60/20/20 train/validation/test, random_state=42
 - Cross-validation: stratified folds on the training split
 - Leakage warning: `duration` is dropped because it is known only after a call ends
-- `pdays` sentinel: `pdays == -1` becomes `pdays_was_minus_one`, `never_contacted_flag`,
+- `pdays` sentinel: `pdays == 999` becomes `pdays_was_999`, `never_contacted_flag`,
   and `pdays_clean`
 - `unknown` treatment: preserved as a real categorical value
 

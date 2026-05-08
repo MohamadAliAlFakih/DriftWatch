@@ -5,6 +5,7 @@ File summary:
 - Requires a shared platform token and a complete safety checklist.
 - Promotes an existing MLflow registered model version into Production.
 - Mirrors the accepted production model in the platform database and writes audit logs.
+- Reuses an injected MLflow registry service when created by the app lifespan.
 """
 
 from __future__ import annotations
@@ -34,24 +35,37 @@ REQUIRED_CHECKLIST = (
 class PromotionRejected(ValueError):  # noqa: N818 - API uses this domain-specific name.
     """Represent a promotion request that failed validation or registry checks."""
 
-    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        details: dict[str, Any] | None = None,
+        *,
+        status_code: int = 403,
+    ) -> None:
         """Store rejection details and initialize the exception message."""
         self.details = details or {}
+        self.status_code = status_code
         super().__init__(message)
 
 
 class PromotionService:
     """Coordinate token checks, checklist validation, MLflow promotion, and audit logging."""
 
-    def __init__(self, settings: Settings) -> None:
-        """Store settings and create the MLflow registry service wrapper."""
+    def __init__(
+        self,
+        settings: Settings,
+        registry_service: RegistryService | None = None,
+    ) -> None:
+        """Store settings and reuse or create the MLflow registry service wrapper."""
         self.settings = settings
-        self.registry = RegistryService(settings)
+        self.registry = registry_service or RegistryService(settings)
 
     def promote(
         self, db: Session, payload: PromotionRequest, token: str | None
     ) -> PromotionResponse:
         """Validate and apply one idempotent model promotion request."""
+        # why idempotent? because of the request_id, if the same request_id is sent again, it will return the same result without applying the promotion again. This is important to prevent accidental double promotions if the request is retried.
+
         self._validate_token(token, self.settings.promotion_bearer_token)
         existing = (
             db.query(PromotionAuditLog)
@@ -99,7 +113,7 @@ class PromotionService:
     def _validate_token(self, token: str | None, expected: SecretStr) -> None:
         """Reject the promotion request when the shared platform token is missing or wrong."""
         if token != expected.get_secret_value():
-            raise PromotionRejected("invalid platform token")
+            raise PromotionRejected("invalid platform token", status_code=401)
 
     def _validate_checklist(self, payload: PromotionRequest) -> None:
         """Reject the promotion request when any required checklist item is false."""

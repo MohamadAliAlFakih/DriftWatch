@@ -67,6 +67,40 @@ class RegistryService:
         except Exception:
             return None
 
+    def get_fallback_model(self) -> RegistryModel | None:
+        """Return the most recent registered model that is not current Production."""
+        name = self.settings.mlflow_registered_model_name
+        alias = self.settings.mlflow_model_alias
+        production = self.get_current_production_model()
+        production_version = production.model_version if production else None
+
+        try:
+            versions = list(self.client.search_model_versions(f"name='{name}'"))
+        except Exception:
+            return None
+
+        candidates = [
+            version
+            for version in versions
+            if str(version.version) != production_version
+            and getattr(version, "current_stage", None) != alias
+        ]
+        if not candidates:
+            return None
+
+        # Fallback tie rules are intentionally simple:
+        # 1) choose the latest updated non-Production version,
+        # 2) if timestamps tie, choose the larger MLflow version number,
+        # 3) if still tied, prefer an Archived stage because it is the usual
+        #    home of the previous Production model after stage-based promotion.
+        fallback = max(candidates, key=self._fallback_sort_key)
+        stage = getattr(fallback, "current_stage", None) or "Fallback"
+        return self._to_registry_model(
+            fallback,
+            stage,
+            f"models:/{name}/{fallback.version}",
+        )
+
     def verify_model_version_exists(self, model_name: str, model_version: str) -> ModelVersion:
         """Raise if the requested registered model version does not exist."""
         return self.client.get_model_version(model_name, model_version)
@@ -122,6 +156,10 @@ class RegistryService:
         model = self.get_current_production_model()
         if model is None:
             raise LookupError("no MLflow Production model is available")
+        return self.load_registered_model(model)
+
+    def load_registered_model(self, model: RegistryModel) -> Any:
+        """Load a registered sklearn model by its registry URI."""
         return mlflow.sklearn.load_model(model.model_uri)
 
     def _to_registry_model(
@@ -147,3 +185,17 @@ class RegistryService:
             metrics=metrics,
             tags=tags,
         )
+
+    def _fallback_sort_key(self, version: ModelVersion) -> tuple[int, int, int]:
+        """Return the ordered key used by `get_fallback_model`."""
+        timestamp = int(
+            getattr(version, "last_updated_timestamp", None)
+            or getattr(version, "creation_timestamp", None)
+            or 0
+        )
+        try:
+            version_number = int(version.version)
+        except (TypeError, ValueError):
+            version_number = 0
+        archived_rank = 1 if getattr(version, "current_stage", None) == "Archived" else 0
+        return timestamp, version_number, archived_rank

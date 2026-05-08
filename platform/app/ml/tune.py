@@ -40,7 +40,7 @@ def tune_selected_pipeline(
             },
             scoring="roc_auc",
             cv=cv,
-            n_jobs=-1,
+            n_jobs=1,
         ),
         "random_forest": RandomizedSearchCV(
             pipeline,
@@ -52,7 +52,7 @@ def tune_selected_pipeline(
             n_iter=5,
             scoring="roc_auc",
             cv=cv,
-            n_jobs=-1,
+            n_jobs=1,
             random_state=random_state,
         ),
         "hist_gradient_boosting": GridSearchCV(
@@ -64,7 +64,7 @@ def tune_selected_pipeline(
             },
             scoring="roc_auc",
             cv=cv,
-            n_jobs=-1,
+            n_jobs=1,
         ),
     }
 
@@ -80,7 +80,7 @@ def tune_selected_pipeline(
         y_train,
         cv=cv,
         method="predict_proba",
-        n_jobs=-1,
+        n_jobs=1,
     )[:, 1]
     best_estimator.fit(x_train, y_train)
     return {

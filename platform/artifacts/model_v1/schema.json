@@ -31,7 +31,8 @@
       "allowed_values": [
         "divorced",
         "married",
-        "single"
+        "single",
+        "unknown"
       ],
       "dtype": "object",
       "name": "marital",
@@ -39,9 +40,13 @@
     },
     {
       "allowed_values": [
-        "primary",
-        "secondary",
-        "tertiary",
+        "basic.4y",
+        "basic.6y",
+        "basic.9y",
+        "high.school",
+        "illiterate",
+        "professional.course",
+        "university.degree",
         "unknown"
       ],
       "dtype": "object",
@@ -51,6 +56,7 @@
     {
       "allowed_values": [
         "no",
+        "unknown",
         "yes"
       ],
       "dtype": "object",
@@ -58,13 +64,9 @@
       "required": true
     },
     {
-      "dtype": "int64",
-      "name": "balance",
-      "required": true
-    },
-    {
       "allowed_values": [
         "no",
+        "unknown",
         "yes"
       ],
       "dtype": "object",
@@ -74,6 +76,7 @@
     {
       "allowed_values": [
         "no",
+        "unknown",
         "yes"
       ],
       "dtype": "object",
@@ -83,16 +86,10 @@
     {
       "allowed_values": [
         "cellular",
-        "telephone",
-        "unknown"
+        "telephone"
       ],
       "dtype": "object",
       "name": "contact",
-      "required": true
-    },
-    {
-      "dtype": "int64",
-      "name": "day",
       "required": true
     },
     {
@@ -100,8 +97,6 @@
         "apr",
         "aug",
         "dec",
-        "feb",
-        "jan",
         "jul",
         "jun",
         "mar",
@@ -112,6 +107,18 @@
       ],
       "dtype": "object",
       "name": "month",
+      "required": true
+    },
+    {
+      "allowed_values": [
+        "fri",
+        "mon",
+        "thu",
+        "tue",
+        "wed"
+      ],
+      "dtype": "object",
+      "name": "day_of_week",
       "required": true
     },
     {
@@ -132,17 +139,41 @@
     {
       "allowed_values": [
         "failure",
-        "other",
-        "success",
-        "unknown"
+        "nonexistent",
+        "success"
       ],
       "dtype": "object",
       "name": "poutcome",
       "required": true
     },
     {
+      "dtype": "float64",
+      "name": "emp.var.rate",
+      "required": true
+    },
+    {
+      "dtype": "float64",
+      "name": "cons.price.idx",
+      "required": true
+    },
+    {
+      "dtype": "float64",
+      "name": "cons.conf.idx",
+      "required": true
+    },
+    {
+      "dtype": "float64",
+      "name": "euribor3m",
+      "required": true
+    },
+    {
+      "dtype": "float64",
+      "name": "nr.employed",
+      "required": true
+    },
+    {
       "dtype": "int64",
-      "name": "pdays_was_minus_one",
+      "name": "pdays_was_999",
       "required": true
     },
     {
@@ -162,42 +193,63 @@
       "age": {
         "type": "integer"
       },
-      "balance": {
-        "type": "integer"
-      },
       "campaign": {
         "type": "integer"
+      },
+      "cons.conf.idx": {
+        "type": "number"
+      },
+      "cons.price.idx": {
+        "type": "number"
       },
       "contact": {
         "enum": [
           "cellular",
-          "telephone",
-          "unknown"
+          "telephone"
         ],
         "type": "string"
       },
-      "day": {
-        "type": "integer"
+      "day_of_week": {
+        "enum": [
+          "fri",
+          "mon",
+          "thu",
+          "tue",
+          "wed"
+        ],
+        "type": "string"
       },
       "default": {
         "enum": [
           "no",
+          "unknown",
           "yes"
         ],
         "type": "string"
       },
       "education": {
         "enum": [
-          "primary",
-          "secondary",
-          "tertiary",
+          "basic.4y",
+          "basic.6y",
+          "basic.9y",
+          "high.school",
+          "illiterate",
+          "professional.course",
+          "university.degree",
           "unknown"
         ],
         "type": "string"
       },
+      "emp.var.rate": {
+        "type": "number"
+      },
+      "euribor3m": {
+        "type": "number"
+      },
       "housing": {
         "enum": [
           "no",
+          "unknown",
           "yes"
         ],
         "type": "string"
@@ -222,6 +274,7 @@
       "loan": {
         "enum": [
           "no",
+          "unknown",
           "yes"
         ],
         "type": "string"
@@ -230,7 +283,8 @@
         "enum": [
           "divorced",
           "married",
-          "single"
+          "single",
+          "unknown"
         ],
         "type": "string"
       },
@@ -239,8 +293,6 @@
           "apr",
           "aug",
           "dec",
-          "feb",
-          "jan",
           "jul",
           "jun",
           "mar",
@@ -254,21 +306,23 @@
       "never_contacted_flag": {
         "type": "integer"
       },
+      "nr.employed": {
+        "type": "number"
+      },
       "pdays": {
         "type": "integer"
       },
       "pdays_clean": {
         "type": "integer"
       },
-      "pdays_was_minus_one": {
+      "pdays_was_999": {
         "type": "integer"
       },
       "poutcome": {
         "enum": [
           "failure",
-          "other",
-          "success",
-          "unknown"
+          "nonexistent",
+          "success"
         ],
         "type": "string"
       },
@@ -282,17 +336,21 @@
       "marital",
       "education",
       "default",
-      "balance",
       "housing",
       "loan",
       "contact",
-      "day",
       "month",
+      "day_of_week",
       "campaign",
       "pdays",
       "previous",
       "poutcome",
-      "pdays_was_minus_one",
+      "emp.var.rate",
+      "cons.price.idx",
+      "cons.conf.idx",
+      "euribor3m",
+      "nr.employed",
+      "pdays_was_999",
       "never_contacted_flag",
       "pdays_clean"
     ],
@@ -304,17 +362,21 @@
     "marital",
     "education",
     "default",
-    "balance",
     "housing",
     "loan",
     "contact",
-    "day",
     "month",
+    "day_of_week",
     "campaign",
     "pdays",
     "previous",
     "poutcome",
-    "pdays_was_minus_one",
+    "emp.var.rate",
+    "cons.price.idx",
+    "cons.conf.idx",
+    "euribor3m",
+    "nr.employed",
+    "pdays_was_999",
     "never_contacted_flag",
     "pdays_clean"
   ],

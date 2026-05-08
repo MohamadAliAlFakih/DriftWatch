@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from app.ml.threshold import find_highest_threshold_meeting_recall
+from app.ml.train import select_best_model
 
 
 def test_returns_highest_threshold_satisfying_recall() -> None:
@@ -31,3 +32,25 @@ def test_raises_value_error_when_recall_is_impossible() -> None:
 
     with pytest.raises(ValueError, match="no_positive_examples"):
         find_highest_threshold_meeting_recall(y_true, y_proba, min_recall=0.75)
+
+
+def test_model_selection_prefers_highest_recall_valid_threshold() -> None:
+    """Verify selection follows the project threshold-first tie rule."""
+    candidates = [
+        {
+            "name": "random_forest",
+            "cv_auc": 0.93,
+            "threshold": {"threshold": 0.31, "recall": 0.76},
+            "validation_metrics": {"f1": 0.50},
+        },
+        {
+            "name": "logistic_regression",
+            "cv_auc": 0.91,
+            "threshold": {"threshold": 0.45, "recall": 0.75},
+            "validation_metrics": {"f1": 0.47},
+        },
+    ]
+
+    best = select_best_model(candidates)
+
+    assert best["name"] == "logistic_regression"

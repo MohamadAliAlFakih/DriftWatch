@@ -5,6 +5,7 @@ File summary:
 - Compares recent prediction inputs and outputs against that reference window.
 - Computes numeric PSI, categorical chi-square drift, and output PSI.
 - Saves drift reports and sends webhook alerts when severity meaningfully changes.
+- Reuses an injected webhook service instead of creating an HTTP client per alert.
 """
 
 from __future__ import annotations
@@ -41,9 +42,14 @@ ALERT_SEVERITIES = {"medium", "high", "critical"}
 class DriftService:
     """Coordinate reference statistics, drift checks, report persistence, and alerting."""
 
-    def __init__(self, settings: Settings) -> None:
-        """Store platform settings used by drift calculations and webhooks."""
+    def __init__(
+        self,
+        settings: Settings,
+        webhook_service: WebhookService | None = None,
+    ) -> None:
+        """Store settings and the webhook sender used by alerting."""
         self.settings = settings
+        self.webhook_service = webhook_service or WebhookService(settings)
 
     def recompute_reference(self, db: Session) -> ReferenceStatsResponse:
         """Rebuild active reference statistics from the configured training dataset."""
@@ -99,6 +105,8 @@ class DriftService:
 
     def check_drift(self, db: Session) -> DriftCheckResponse:
         """Compare recent predictions to reference stats and optionally emit an alert."""
+
+        # fetch the recent prediction window 
         predictions = (
             db.query(Prediction)
             .order_by(desc(Prediction.created_at))
@@ -106,6 +114,8 @@ class DriftService:
             .all()
         )
         predictions = list(reversed(predictions))
+
+        # fetch the most recent drift report to compare severity and avoid alert fatigue on startup or small fluctuations
         previous = db.query(DriftReport).order_by(desc(DriftReport.created_at)).first()
         previous_severity = previous.severity if previous else None
 
@@ -149,9 +159,12 @@ class DriftService:
             and severity != previous_severity
             and previous_severity != "insufficient_data"
         ):
+            # create the alert in the database before sending the webhook so we have a record of it and can update status based on the response
             alert = self._create_alert(db, report)
-            # bridge sync drift_service into async webhook delivery (Engineering Standards Ch. 1)
-            asyncio.run(WebhookService(self.settings).send_drift_alert(alert))
+
+            # bridge sync drift_service into async webhook delivery
+            # what 
+            asyncio.run(self.webhook_service.send_drift_alert(alert))
             db.commit()
             db.refresh(alert)
             alert_info = {
