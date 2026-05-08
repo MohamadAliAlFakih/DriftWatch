@@ -38,6 +38,17 @@ SEVERITY_ORDER = {
 }
 ALERT_SEVERITIES = {"medium", "high", "critical"}
 
+# Map internal 5-level severities to the 3-level palette the agent contract uses.
+# DriftEventV1 (contracts/v1.py) only knows green/yellow/red; collapse accordingly.
+_CONTRACT_SEVERITY = {
+    "insufficient_data": "green",
+    "none": "green",
+    "low": "green",
+    "medium": "yellow",
+    "high": "red",
+    "critical": "red",
+}
+
 
 class DriftService:
     """Coordinate reference statistics, drift checks, report persistence, and alerting."""
@@ -162,9 +173,10 @@ class DriftService:
             # create the alert in the database before sending the webhook so we have a record of it and can update status based on the response
             alert = self._create_alert(db, report)
 
-            # bridge sync drift_service into async webhook delivery
-            # what 
-            asyncio.run(self.webhook_service.send_drift_alert(alert))
+            # Sync delivery — the route is sync, and asyncio.run() here would
+            # create a fresh event loop while WebhookService.client lives on
+            # the lifespan-owned loop, producing "Event loop is closed".
+            self.webhook_service.send_drift_alert_sync(alert)
             db.commit()
             db.refresh(alert)
             alert_info = {
@@ -304,28 +316,26 @@ class DriftService:
         return "none"
 
     def _create_alert(self, db: Session, report: DriftReport) -> DriftAlert:
-        """Create and persist the webhook alert payload for one drift report."""
+        """Create and persist the webhook alert payload for one drift report.
+
+        Payload conforms to contracts/v1.py::DriftEventV1 — the agent rejects
+        anything that does not parse cleanly there, so the field shape, name,
+        and types here are load-bearing.
+        """
         event_id = f"drift_{uuid.uuid4().hex}"
         payload = {
-            "contract_version": "v1",
             "event_id": event_id,
-            "drift_report_id": str(report.id),
+            "emitted_at": datetime.now(UTC).isoformat(),
             "model_name": report.model_name,
-            "model_version": report.model_version,
-            "severity": report.severity,
-            "previous_severity": report.previous_severity,
-            "window": {
-                "size": report.window_size,
-                "start": report.window_start.isoformat() if report.window_start else None,
-                "end": report.window_end.isoformat() if report.window_end else None,
-            },
-            "signals": {
-                "numeric_psi": report.numeric_psi,
-                "categorical_chi2": report.categorical_chi2,
-                "output_drift": report.output_drift,
-            },
-            "recommended_actions": ["replay_test_set", "retrain_candidate"],
-            "created_at": datetime.now(UTC).isoformat(),
+            "model_version": _coerce_model_version(report.model_version),
+            "window_start": report.window_start.isoformat() if report.window_start else None,
+            "window_end": report.window_end.isoformat() if report.window_end else None,
+            "window_size": report.window_size,
+            "previous_severity": _CONTRACT_SEVERITY.get(
+                report.previous_severity or "none", "green"
+            ),
+            "current_severity": _CONTRACT_SEVERITY.get(report.severity, "green"),
+            "top_metrics": _build_top_metrics(report, settings=self.settings),
         }
         alert = DriftAlert(
             drift_report_id=report.id,
@@ -353,3 +363,76 @@ def psi(reference: np.ndarray, current: np.ndarray, bin_edges: list[float]) -> f
     ref_p = np.clip(ref_p, eps, 1.0)
     cur_p = np.clip(cur_p, eps, 1.0)
     return float(np.sum((cur_p - ref_p) * np.log(cur_p / ref_p)))
+
+
+def _coerce_model_version(value: str | None) -> int:
+    """Cast the DB-stored string version to int for DriftEventV1.
+
+    MLflow registers integer versions ("1", "2", ...). Labels like "v1" are
+    accepted by stripping a leading 'v' so we don't break on that convention.
+    Falls back to 0 if the value is missing or unparseable, since the agent
+    contract requires an integer and we'd rather ship a sentinel than 500.
+    """
+    if value is None:
+        return 0
+    candidate = value.lstrip("vV")
+    try:
+        return int(candidate)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _build_top_metrics(report: DriftReport, *, settings: Settings) -> list[dict[str, Any]]:
+    """Pick the 5 highest-drift signals for the DriftEventV1 top_metrics field.
+
+    Sorts numeric PSI, categorical chi², and output drift across all features and
+    returns the worst offenders so the agent can reason about what drifted hardest.
+    """
+    candidates: list[tuple[float, dict[str, Any]]] = []
+
+    for feature, info in (report.numeric_psi or {}).items():
+        psi_value = float(info.get("psi", 0.0))
+        candidates.append(
+            (
+                psi_value,
+                {
+                    "feature": str(feature),
+                    "metric": "psi",
+                    "value": psi_value,
+                    "threshold": float(settings.psi_medium_threshold),
+                },
+            )
+        )
+
+    for feature, info in (report.categorical_chi2 or {}).items():
+        chi2_value = float(info.get("chi2", 0.0))
+        candidates.append(
+            (
+                chi2_value,
+                {
+                    "feature": str(feature),
+                    "metric": "chi2",
+                    "value": chi2_value,
+                    "threshold": float(settings.chi2_pvalue_threshold),
+                },
+            )
+        )
+
+    output = report.output_drift or {}
+    if output:
+        output_psi = float(output.get("psi", 0.0))
+        candidates.append(
+            (
+                output_psi,
+                {
+                    "feature": "prediction",
+                    "metric": "output_dist",
+                    "value": output_psi,
+                    "threshold": float(settings.output_drift_psi_threshold),
+                },
+            )
+        )
+
+    # Sort by absolute magnitude descending; cap at 5 per DriftEventV1.top_metrics constraint.
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [metric for _, metric in candidates[:5]]

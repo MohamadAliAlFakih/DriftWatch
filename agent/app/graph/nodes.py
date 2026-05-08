@@ -126,15 +126,17 @@ async def action_node(state: InvestigationState, config: RunnableConfig) -> dict
 
     log.info("action_planned", investigation_id=state.investigation_id, action=plan.action, target=plan.target_version)
 
-    # rollback touches Production — pause for HIL BEFORE enqueueing the job (D-08, HIL-01)
-    if plan.action == "rollback":
+    # rollback AND retrain both touch Production once their job completes — pause for HIL BEFORE enqueueing
+    # (D-08 originally gated only rollback; broadened so demo HIL flow fires on every retrain too)
+    if plan.action in ("rollback", "retrain"):
+        verb = "Roll back" if plan.action == "rollback" else "Retrain"
         # interrupt persists state, returns to caller; resume feeds {"approved": bool, ...}
         decision_payload = interrupt({
             "investigation_id": state.investigation_id,
             "recommended_action": plan.model_dump(mode="json"),
             "summary": (
-                f"Roll back {state.drift_event.model_name} from "
-                f"v{state.drift_event.model_version} to v{plan.target_version}."
+                f"{verb} {state.drift_event.model_name} "
+                f"v{state.drift_event.model_version} (target v{plan.target_version})."
             ),
         })
         # on resume: decision_payload is whatever Command(resume=...) was called with

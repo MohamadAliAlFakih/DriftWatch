@@ -69,6 +69,12 @@ async def start_investigation(
             except Exception:
                 # malformed state from the checkpointer — leave the DB row as it was
                 return
+            # When the graph pauses on interrupt(), the checkpointed state still has
+            # the previous node's current_node value (the interrupting node never returns
+            # a state update). Detect a pending interrupt and surface it as awaiting_hil
+            # so the dashboard's HIL inbox filter can find this investigation.
+            if snapshot.next and final.current_node not in {"awaiting_hil", "done", "stale"}:
+                final = final.model_copy(update={"current_node": "awaiting_hil"})
             await investigations_service.update_state(session, investigation_id, final)
 
 
